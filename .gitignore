@@ -1,0 +1,11 @@
+.next/
+node_modules/
+playwright-report/
+test-results/
+tsconfig.tsbuildinfo
+npm-debug.log*
+.env
+.env.local
+.env.*.local
+supabase/.branches/
+supabase/.temp/

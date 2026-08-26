@@ -1,47 +1,189 @@
 @import "tailwindcss";
 
-:root {
-  --background: #f8fafc;
-  --foreground: #172033;
-  --card: #ffffff;
-  --card-foreground: #172033;
-  --popover: #ffffff;
-  --popover-foreground: #172033;
-  --primary: #2563eb;
-  --primary-foreground: #ffffff;
-  --secondary: #e2e8f0;
-  --secondary-foreground: #172033;
-  --muted: #eef2f7;
-  --muted-foreground: #5f6f89;
-  --accent: #16a34a;
-  --accent-foreground: #ffffff;
-  --destructive: #dc2626;
-  --destructive-foreground: #ffffff;
-  --border: #d8e0eb;
-  --input: #d8e0eb;
-  --ring: #2563eb;
-  --radius: 0.5rem;
+@layer base {
+  :root {
+    /* 1. Page Backgrounds */
+    --background: #f8fafc;
+    --background-secondary: #f1f5f9;
+    --background-tertiary: #e2e8f0;
+
+    /* 2. Surfaces & Cards */
+    --surface: #ffffff;
+    --surface-hover: #f8fafc;
+    --surface-active: #f1f5f9;
+    --card: #ffffff;
+    --card-hover: #f8fafc;
+    --card-secondary: #f1f5f9;
+
+    /* 3. Text & Typography */
+    --foreground: #0f172a;
+    --foreground-secondary: #334155;
+    --muted: #f1f5f9;
+    --muted-foreground: #64748b;
+    --text-disabled: #94a3b8;
+
+    /* 4. Borders & Dividers */
+    --border: #e2e8f0;
+    --border-subtle: #f1f5f9;
+    --divider: #e2e8f0;
+
+    /* 5. Inputs & Form Controls */
+    --input-bg: #ffffff;
+    --input-border: #cbd5e1;
+    --input-focus: #2563eb;
+
+    /* 6. Brand Accents */
+    --primary: #2563eb;
+    --primary-hover: #1d4ed8;
+    --primary-foreground: #ffffff;
+    --secondary: #f1f5f9;
+    --secondary-foreground: #0f172a;
+    --accent: #10b981;
+    --accent-foreground: #ffffff;
+    --destructive: #ef4444;
+    --destructive-foreground: #ffffff;
+    --warning: #f59e0b;
+    --warning-foreground: #ffffff;
+    --purple: #8b5cf6;
+    --cyan: #06b6d4;
+
+    /* 7. Popovers & Overlays */
+    --popover: #ffffff;
+    --popover-foreground: #0f172a;
+    --ring: #2563eb;
+    --radius: 0.75rem;
+
+    /* Grid pattern */
+    --grid-dot: rgba(15, 23, 42, 0.06);
+  }
+
+  .dark {
+    /* 1. Page Backgrounds */
+    --background: #090D16;
+    --background-secondary: #0E1422;
+    --background-tertiary: #131B2E;
+
+    /* 2. Surfaces & Cards */
+    --surface: #121827;
+    --surface-hover: #172033;
+    --surface-active: #1D2840;
+    --card: #121827;
+    --card-hover: #172033;
+    --card-secondary: #0E1422;
+
+    /* 3. Text & Typography */
+    --foreground: #f8fafc;
+    --foreground-secondary: #cbd5e1;
+    --muted: #172033;
+    --muted-foreground: #94a3b8;
+    --text-disabled: #64748b;
+
+    /* 4. Borders & Dividers */
+    --border: rgba(255, 255, 255, 0.08);
+    --border-subtle: #1e293b;
+    --divider: rgba(255, 255, 255, 0.08);
+
+    /* 5. Inputs & Form Controls */
+    --input-bg: #0B0F1A;
+    --input-border: #1e293b;
+    --input-focus: #3b82f6;
+
+    /* 6. Brand Accents */
+    --primary: #3b82f6;
+    --primary-hover: #60a5fa;
+    --primary-foreground: #ffffff;
+    --secondary: #172033;
+    --secondary-foreground: #f8fafc;
+    --accent: #10b981;
+    --accent-foreground: #ffffff;
+    --destructive: #ef4444;
+    --destructive-foreground: #ffffff;
+    --warning: #f59e0b;
+    --warning-foreground: #ffffff;
+    --purple: #a855f7;
+    --cyan: #06b6d4;
+
+    /* 7. Popovers & Overlays */
+    --popover: #121827;
+    --popover-foreground: #f8fafc;
+    --ring: #3b82f6;
+
+    /* Grid pattern */
+    --grid-dot: rgba(255, 255, 255, 0.07);
+  }
 }
 
 * {
   border-color: var(--border);
 }
 
-body {
-  margin: 0;
-  background: var(--background);
+html, body {
+  background-color: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  min-height: 100vh;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/* Subtle dot grid pattern */
+.bg-cyber-grid {
+  background-color: var(--background);
+  background-image: radial-gradient(var(--grid-dot) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+/* Glow effects */
+.glow-blue {
+  box-shadow: 0 0 25px -5px rgba(59, 130, 246, 0.25);
+}
+
+.glow-blue-sm {
+  box-shadow: 0 0 15px -3px rgba(59, 130, 246, 0.2);
+}
+
+.glow-emerald {
+  box-shadow: 0 0 25px -5px rgba(16, 185, 129, 0.25);
+}
+
+.glow-amber {
+  box-shadow: 0 0 25px -5px rgba(245, 158, 11, 0.25);
+}
+
+.glow-purple {
+  box-shadow: 0 0 25px -5px rgba(168, 85, 247, 0.25);
+}
+
+/* Custom Sleek Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--background);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-subtle);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--muted-foreground);
 }
 
 a,
 button,
 input,
+select,
+textarea,
 [role="button"] {
   outline-color: var(--ring);
 }
 
 .container-page {
-  width: min(1120px, calc(100% - 32px));
+  width: min(1320px, calc(100% - 32px));
   margin: 0 auto;
 }

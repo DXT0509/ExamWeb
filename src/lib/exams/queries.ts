@@ -1,19 +1,7 @@
 import { parseListParams, type SearchParamsRecord } from "@/lib/admin/types";
 import { createClient } from "@/lib/supabase/server";
 import type { Enums } from "@/types/database";
-
-export const examStatusLabels = {
-  draft: "Bản nháp",
-  published: "Đã xuất bản",
-  closed: "Đã đóng",
-  archived: "Đã lưu trữ",
-} as const;
-
-export const accessTypeLabels = {
-  public: "Công khai",
-  students_only: "Chỉ học sinh đã đăng nhập",
-  private: "Riêng tư",
-} as const;
+export { examStatusLabels, accessTypeLabels } from "./constants";
 
 export async function listExams(searchParams: SearchParamsRecord) {
   const supabase = await createClient();
@@ -57,5 +45,20 @@ export async function getExamEditorData(examId: string) {
     .order("position", { ascending: true, referencedTable: "questions" })
     .order("position", { ascending: true, referencedTable: "questions.question_options" });
   if (sectionsError) throw sectionsError;
-  return { exam, sections: sections ?? [] };
+
+  type OptionRow = { deleted_at?: string | null };
+  type QuestionRow = { deleted_at?: string | null; question_options?: OptionRow[] };
+  type SectionRow = { questions?: QuestionRow[] };
+
+  const sanitizedSections = (sections ?? []).map((sec: SectionRow) => ({
+    ...sec,
+    questions: (sec.questions ?? [])
+      .filter((q) => !q.deleted_at)
+      .map((q) => ({
+        ...q,
+        question_options: (q.question_options ?? []).filter((opt) => !opt.deleted_at),
+      })),
+  }));
+
+  return { exam, sections: sanitizedSections };
 }

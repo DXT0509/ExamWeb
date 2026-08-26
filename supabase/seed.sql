@@ -6,7 +6,7 @@ insert into auth.users (
   ('00000000-0000-0000-0000-000000000000', '10000000-0000-0000-0000-000000000001', 'authenticated', 'authenticated', 'admin@example.test', crypt('LocalAdmin123!', gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}', '{"display_name":"Quản trị viên local"}', now(), now(), '', '', '', ''),
   ('00000000-0000-0000-0000-000000000000', '10000000-0000-0000-0000-000000000002', 'authenticated', 'authenticated', 'student1@example.test', crypt('LocalStudent123!', gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}', '{"display_name":"Học viên một"}', now(), now(), '', '', '', ''),
   ('00000000-0000-0000-0000-000000000000', '10000000-0000-0000-0000-000000000003', 'authenticated', 'authenticated', 'locked@example.test', crypt('LocalStudent123!', gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}', '{"display_name":"Học viên bị khóa"}', now(), now(), '', '', '', '')
-on conflict (id) do update set email = excluded.email, updated_at = now();
+on conflict (id) do update set email = excluded.email, encrypted_password = excluded.encrypted_password, updated_at = now();
 
 insert into auth.identities (
   id, user_id, provider_id, identity_data, provider, last_sign_in_at, created_at, updated_at
@@ -24,7 +24,16 @@ on conflict (id) do update set role = excluded.role, status = excluded.status, d
 
 insert into public.subjects (id, name, slug, description, created_by, updated_by) values
   ('20000000-0000-0000-0000-000000000001', 'Toán học', 'toan-hoc', 'Các đề luyện tư duy định lượng và tính toán.', '10000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001'),
-  ('20000000-0000-0000-0000-000000000002', 'Ngữ văn', 'ngu-van', 'Các đề đọc hiểu và lập luận ngôn ngữ.', '10000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001')
+  ('20000000-0000-0000-0000-000000000002', 'Ngữ văn', 'ngu-van', 'Các đề đọc hiểu và lập luận ngôn ngữ.', '10000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001'),
+  ('20000000-0000-0000-0000-000000000003', 'Tiếng Anh', 'tieng-anh', 'Các đề luyện ngữ pháp, từ vựng và kỹ năng đọc hiểu tiếng Anh.', '10000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001'),
+  ('20000000-0000-0000-0000-000000000004', 'Vật lý', 'vat-ly', 'Các đề luyện kiến thức vật lý và tư duy khoa học tự nhiên.', '10000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001'),
+  ('20000000-0000-0000-0000-000000000005', 'Hóa học', 'hoa-hoc', 'Các đề luyện phản ứng, cấu trúc chất và giải toán hóa học.', '10000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001'),
+  ('20000000-0000-0000-0000-000000000006', 'Sinh học', 'sinh-hoc', 'Các đề luyện di truyền, tiến hóa, sinh thái và cơ thể sống.', '10000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001'),
+  ('20000000-0000-0000-0000-000000000007', 'Lịch sử', 'lich-su', 'Các đề luyện lịch sử Việt Nam và lịch sử thế giới.', '10000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001'),
+  ('20000000-0000-0000-0000-000000000008', 'Địa lý', 'dia-ly', 'Các đề luyện địa lý tự nhiên, kinh tế - xã hội và kỹ năng bản đồ/Atlat.', '10000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001'),
+  ('20000000-0000-0000-0000-000000000009', 'Giáo dục công dân', 'giao-duc-cong-dan', 'Các đề luyện kiến thức pháp luật và đời sống công dân.', '10000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001'),
+  ('20000000-0000-0000-0000-000000000010', 'Tin học', 'tin-hoc', 'Các đề luyện thuật toán, lập trình và công nghệ thông tin.', '10000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001'),
+  ('20000000-0000-0000-0000-000000000011', 'Công nghệ', 'cong-nghe', 'Các đề luyện kỹ thuật công nghiệp, nông nghiệp và ứng dụng công nghệ.', '10000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001')
 on conflict (id) do update set name = excluded.name, slug = excluded.slug, description = excluded.description;
 
 insert into public.exam_categories (id, name, slug, description, created_by, updated_by) values
@@ -90,3 +99,36 @@ where id in (
   '40000000-0000-0000-0000-000000000003',
   '40000000-0000-0000-0000-000000000004'
 );
+
+insert into public.documents (
+  id, title, slug, description, external_url, file_path, status, is_public, created_by, updated_by
+) values
+  ('50000000-0000-0000-0000-000000000001', 'Đề cương ôn tập Toán tư duy', 'de-cuong-on-tap-toan-tu-duy', 'Tài liệu tổng hợp kiến thức trọng tâm cho môn Toán tư duy.', 'https://example.test/docs/toan-tu-duy.pdf', null, 'published', true, '10000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001'),
+  ('50000000-0000-0000-0000-000000000002', 'Cẩm nang hướng dẫn làm bài đọc hiểu', 'cam-nang-huong-dan-lam-bai-doc-hieu', 'Hướng dẫn kỹ năng đọc hiểu và phân tích văn bản cho học sinh.', null, 'uploads/doc-hieu-guide.pdf', 'published', true, '10000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001'),
+  ('50000000-0000-0000-0000-000000000003', 'Tài liệu nháp nội bộ', 'tai-lieu-nhap-noi-bo', 'Tài liệu đang trong quá trình biên soạn.', 'https://example.test/docs/draft.pdf', null, 'draft', true, '10000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001'),
+  ('50000000-0000-0000-0000-000000000004', 'Tài liệu lưu trữ cũ', 'tai-lieu-luu-tru-cu', 'Tài liệu của các kỳ thi trước đã được lưu trữ.', 'https://example.test/docs/archived.pdf', null, 'archived', true, '10000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001'),
+  ('50000000-0000-0000-0000-000000000005', 'Tài liệu nội bộ riêng tư', 'tai-lieu-noi-bo-rieng-tu', 'Tài liệu dành riêng cho ban quản trị kiểm tra.', 'https://example.test/docs/private.pdf', null, 'published', false, '10000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001')
+on conflict (id) do update set
+  title = excluded.title,
+  slug = excluded.slug,
+  description = excluded.description,
+  external_url = excluded.external_url,
+  file_path = excluded.file_path,
+  status = excluded.status,
+  is_public = excluded.is_public;
+
+insert into storage.objects (
+  id, bucket_id, name, owner, created_at, updated_at, last_accessed_at, metadata
+) values (
+  '50000000-0000-0000-0000-000000000002',
+  'documents',
+  'uploads/doc-hieu-guide.pdf',
+  '10000000-0000-0000-0000-000000000001',
+  now(),
+  now(),
+  now(),
+  '{"mimetype": "application/pdf", "size": 1024}'::jsonb
+)
+on conflict (id) do nothing;
+
+

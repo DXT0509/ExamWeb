@@ -9,13 +9,18 @@ type TaxonomyItem = { id: string; name: string; slug: string; description: strin
 type SelectItem = { id: string; name: string };
 
 function TextArea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
-  return <textarea {...props} className="min-h-24 rounded-md border px-3 py-2 text-sm focus-visible:outline-2" />;
+  return (
+    <textarea
+      {...props}
+      className="min-h-24 rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3.5 py-2 text-sm text-[var(--foreground)] placeholder:text-[var(--muted-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--input-focus)]"
+    />
+  );
 }
 
 function CheckBox({ label, name, defaultChecked = false }: { label: string; name: string; defaultChecked?: boolean }) {
   return (
-    <label className="flex items-center gap-2 text-sm">
-      <input type="checkbox" name={name} defaultChecked={defaultChecked} className="h-4 w-4" />
+    <label className="flex items-center gap-2 text-sm text-[var(--foreground)] cursor-pointer">
+      <input type="checkbox" name={name} defaultChecked={defaultChecked} className="h-4 w-4 rounded border-[var(--input-border)] text-[var(--primary)] focus:ring-[var(--ring)] accent-[var(--primary)]" />
       {label}
     </label>
   );
@@ -27,15 +32,15 @@ export function TaxonomyForm({ item, type }: { item?: TaxonomyItem; type: "subje
   return (
     <ActionForm action={action} submitLabel={item ? "Lưu thay đổi" : isSubject ? "Tạo môn học" : "Tạo danh mục"}>
       {item && <input type="hidden" name="id" value={item.id} />}
-      <label className="grid gap-1 text-sm">
+      <label className="grid gap-1 text-sm text-[var(--foreground)]">
         {isSubject ? "Tên môn học" : "Tên danh mục"}
         <Input name="name" defaultValue={item?.name} required minLength={2} maxLength={100} />
       </label>
-      <label className="grid gap-1 text-sm">
+      <label className="grid gap-1 text-sm text-[var(--foreground)]">
         Slug
         <Input name="slug" defaultValue={item?.slug} required pattern="[a-z0-9]+(-[a-z0-9]+)*" />
       </label>
-      <label className="grid gap-1 text-sm">
+      <label className="grid gap-1 text-sm text-[var(--foreground)]">
         Mô tả
         <TextArea name="description" defaultValue={item?.description ?? ""} />
       </label>
@@ -48,11 +53,11 @@ export function TaxonomyActions({ item, type }: { item: TaxonomyItem; type: "sub
   const deleteAction = type === "subject" ? deleteSubjectAction : deleteCategoryAction;
   return (
     <div className="flex flex-wrap gap-2">
-      <ModalShell title={type === "subject" ? "Sửa môn học" : "Sửa danh mục"} trigger={<Button variant="outline" size="sm">Sửa</Button>}>
+      <ModalShell title={type === "subject" ? "Sửa môn học" : "Sửa danh mục"} trigger={<Button variant="outline" size="sm" className="rounded-xl border-[var(--border)] text-[var(--foreground)] hover:bg-[var(--surface-hover)]">Sửa</Button>}>
         <TaxonomyForm item={item} type={type} />
       </ModalShell>
-      <ModalShell title={type === "subject" ? "Xóa môn học?" : "Xóa danh mục?"} trigger={<Button variant="destructive" size="sm">Xóa</Button>}>
-        <p className="mb-4 text-sm text-[var(--muted-foreground)]">
+      <ModalShell title={type === "subject" ? "Xóa môn học?" : "Xóa danh mục?"} trigger={<Button variant="destructive" size="sm" className="rounded-xl">Xóa</Button>}>
+        <p className="mb-4 text-sm text-[var(--muted-foreground)] leading-relaxed">
           {type === "subject"
             ? "Môn học sẽ không còn xuất hiện trong danh sách hoạt động. Hành động này không xóa vĩnh viễn dữ liệu."
             : "Danh mục sẽ không còn xuất hiện trong danh sách hoạt động. Hành động này không xóa vĩnh viễn dữ liệu."}
@@ -67,39 +72,43 @@ export function TaxonomyActions({ item, type }: { item: TaxonomyItem; type: "sub
 
 export function CreateExamForm({ subjects, categories }: { subjects: SelectItem[]; categories: SelectItem[] }) {
   return (
-    <ActionForm action={createExamAction} submitLabel="Tạo đề mới" className="grid gap-4 md:grid-cols-2">
-      <label className="grid gap-1 text-sm md:col-span-2">Tiêu đề<Input name="title" required minLength={2} maxLength={200} /></label>
-      <label className="grid gap-1 text-sm">Slug<Input name="slug" required pattern="[a-z0-9]+(-[a-z0-9]+)*" /></label>
-      <label className="grid gap-1 text-sm">Thời gian làm bài<Input name="durationMinutes" type="number" min={1} max={300} defaultValue={60} required /></label>
-      <label className="grid gap-1 text-sm">
+    <ActionForm action={createExamAction} submitLabel="Tạo đề thi & Bắt đầu soạn" className="grid gap-5 md:grid-cols-2">
+      <label className="grid gap-1.5 text-sm font-medium text-[var(--foreground)] md:col-span-2">
+        Tiêu đề đề thi
+        <Input name="title" placeholder="Ví dụ: Ôn tập học kỳ 1 — Toán học 12" required minLength={2} maxLength={200} />
+      </label>
+      <label className="grid gap-1.5 text-sm font-medium text-[var(--foreground)]">
         Môn học
-        <select name="subjectId" required className="h-10 rounded-md border px-3 text-sm">
-          <option value="">Chọn môn học</option>
+        <select name="subjectId" required className="h-10 rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 text-sm text-[var(--foreground)] transition-colors focus:border-[var(--primary)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)]/20">
+          <option value="">-- Chọn môn học --</option>
           {subjects.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
         </select>
       </label>
-      <label className="grid gap-1 text-sm">
+      <label className="grid gap-1.5 text-sm font-medium text-[var(--foreground)]">
+        Thời gian làm bài (phút)
+        <Input name="durationMinutes" type="number" min={1} max={300} defaultValue={60} required />
+      </label>
+      <label className="grid gap-1.5 text-sm font-medium text-[var(--foreground)]">
         Danh mục kỳ thi
-        <select name="categoryId" className="h-10 rounded-md border px-3 text-sm">
-          <option value="">Không chọn</option>
+        <select name="categoryId" className="h-10 rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 text-sm text-[var(--foreground)] transition-colors focus:border-[var(--primary)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)]/20">
+          <option value="">Không phân loại danh mục</option>
           {categories.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
         </select>
       </label>
-      <label className="grid gap-1 text-sm">
+      <label className="grid gap-1.5 text-sm font-medium text-[var(--foreground)]">
         Quyền truy cập
-        <select name="accessType" defaultValue="public" className="h-10 rounded-md border px-3 text-sm">
+        <select name="accessType" defaultValue="public" className="h-10 rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 text-sm text-[var(--foreground)] transition-colors focus:border-[var(--primary)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)]/20">
           <option value="public">Công khai</option>
           <option value="students_only">Chỉ học sinh đã đăng nhập</option>
-          <option value="private">Riêng tư</option>
+          <option value="private">Riêng tư (Chỉ Admin xem trước)</option>
         </select>
       </label>
-      <label className="grid gap-1 text-sm md:col-span-2">Mô tả<TextArea name="description" /></label>
-      <div className="grid gap-2 md:col-span-2 md:grid-cols-2">
-        <CheckBox label="Cho phép Guest làm bài" name="allowGuestAttempt" />
-        <CheckBox label="Bắt buộc toàn màn hình" name="fullscreenRequired" defaultChecked />
-        <CheckBox label="Hiện điểm sau khi nộp" name="showScoreAfterSubmit" defaultChecked />
-        <CheckBox label="Hiện đáp án sau khi nộp" name="showAnswersAfterSubmit" />
-        <CheckBox label="Hiện lời giải sau khi nộp" name="showSolutionsAfterSubmit" />
+      <div className="md:col-span-2 space-y-3 pt-2 border-t border-[var(--divider)]">
+        <CheckBox label="Cho phép làm với tư cách Người dùng khách (không cần đăng nhập)" name="allowGuestAttempt" defaultChecked={true} />
+        <CheckBox label="Bắt buộc toàn màn hình & phát hiện chuyển tab" name="fullscreenRequired" defaultChecked={false} />
+        <CheckBox label="Hiển thị điểm số ngay sau khi nộp bài" name="showScoreAfterSubmit" defaultChecked={true} />
+        <CheckBox label="Hiển thị đáp án đúng sau khi nộp bài" name="showAnswersAfterSubmit" defaultChecked={true} />
+        <CheckBox label="Hiển thị lời giải chi tiết sau khi nộp bài" name="showSolutionsAfterSubmit" defaultChecked={true} />
       </div>
     </ActionForm>
   );

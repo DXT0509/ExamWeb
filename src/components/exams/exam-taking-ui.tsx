@@ -48,7 +48,7 @@ export function ExamTakingUI({ initialPayload }: ExamTakingUIProps) {
     return result;
   }, [initialPayload]);
 
-  // 2. Answer State: Map<questionId, { selectedOptionId: string | null; isMarked: boolean }>
+  // 2. Answer State
   const [userAnswers, setUserAnswers] = useState<
     Record<string, { selectedOptionId: string | null; isMarked: boolean }>
   >(() => {
@@ -75,7 +75,7 @@ export function ExamTakingUI({ initialPayload }: ExamTakingUIProps) {
   const [violationStartedAt, setViolationStartedAt] = useState<number | null>(null);
   const [isAutoSubmittingOnViolation, setIsAutoSubmittingOnViolation] = useState(false);
 
-  // 3. Timer State
+  // 4. Timer State
   const [remainingSeconds, setRemainingSeconds] = useState<number>(() => {
     const deadlineMs = new Date(initialPayload.deadline_at).getTime();
     const nowMs = Date.now();
@@ -102,229 +102,221 @@ export function ExamTakingUI({ initialPayload }: ExamTakingUIProps) {
         return;
       }
 
-      // Redirect to result page
-      router.push(`/attempts/${initialPayload.attempt_id}/result`);
+      router.replace(`/attempts/${initialPayload.attempt_id}/result`);
     },
     [initialPayload.attempt_id, isSubmitting, router]
   );
 
-  // Timer Tick
+  // Timer Tick & Auto-Submit on Expire
   useEffect(() => {
-    if (initialPayload.status !== "in_progress") return;
-
-    const interval = setInterval(() => {
-      const deadlineMs = new Date(initialPayload.deadline_at).getTime();
-      const diffSec = Math.max(0, Math.floor((deadlineMs - Date.now()) / 1000));
-      setRemainingSeconds(diffSec);
-
-      if (diffSec <= 0) {
-        clearInterval(interval);
+    if (remainingSeconds <= 0) {
+      const submitTimeout = setTimeout(() => {
         handlePerformSubmit("time_expired");
-      }
+      }, 0);
+      return () => clearTimeout(submitTimeout);
+    }
+
+    const timer = setInterval(() => {
+      setRemainingSeconds((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          setTimeout(() => {
+            handlePerformSubmit("time_expired");
+          }, 0);
+          return 0;
+        }
+        return prev - 1;
+      });
     }, 1000);
 
-    return () => clearInterval(interval);
-  }, [initialPayload.deadline_at, initialPayload.status, handlePerformSubmit]);
+    return () => clearInterval(timer);
+  }, [handlePerformSubmit, remainingSeconds]);
 
-  // Fullscreen Exit & Visibility Change Listener
-  const triggerViolation = useCallback(
-    async (eventType: "fullscreen_exit" | "visibility_hidden") => {
-      if (isSubmitting || initialPayload.status !== "in_progress") return;
-
-      setViolationStartedAt((prev) => prev ?? Date.now());
-      setIsViolationOverlayOpen(true);
-
-      await recordExamEventAction({
-        attemptId: initialPayload.attempt_id,
-        eventType,
-      });
-    },
-    [initialPayload.attempt_id, initialPayload.status, isSubmitting]
-  );
-
+  // Fullscreen & Tab Switch Violation Listeners
   useEffect(() => {
-    if (initialPayload.status !== "in_progress" || !initialPayload.fullscreen_required) return;
+    if (!initialPayload.fullscreen_required) return;
 
-    const handleFullscreenChange = () => {
-      if (document.fullscreenElement === null) {
-        triggerViolation("fullscreen_exit");
-      } else {
-        // Returned to fullscreen by browser shortcut or button
-        setIsViolationOverlayOpen(false);
-        setViolationStartedAt(null);
-        resolveExamEventAction(initialPayload.attempt_id);
+    const handleFullscreenChange = async () => {
+      const isFullscreen = Boolean(document.fullscreenElement);
+      if (!isFullscreen) {
+        if (!isViolationOverlayOpen) {
+          setIsViolationOverlayOpen(true);
+          setViolationStartedAt(Date.now());
+          await recordExamEventAction({
+            attemptId: initialPayload.attempt_id,
+            eventType: "fullscreen_exit",
+          });
+        }
       }
     };
 
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "hidden") {
-        triggerViolation("visibility_hidden");
+    const handleVisibilityChange = async () => {
+      if (document.hidden) {
+        if (!isViolationOverlayOpen) {
+          setIsViolationOverlayOpen(true);
+          setViolationStartedAt(Date.now());
+          await recordExamEventAction({
+            attemptId: initialPayload.attempt_id,
+            eventType: "visibility_hidden",
+          });
+        }
       }
     };
 
     document.addEventListener("fullscreenchange", handleFullscreenChange);
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
-    // Initial check on mount: if fullscreen_required and not currently in fullscreen, trigger violation
-    let mountTimer: NodeJS.Timeout | null = null;
-    if (typeof document !== "undefined" && document.fullscreenElement === null) {
-      mountTimer = setTimeout(() => {
-        triggerViolation("fullscreen_exit");
-      }, 0);
-    }
-
     return () => {
-      if (mountTimer) clearTimeout(mountTimer);
       document.removeEventListener("fullscreenchange", handleFullscreenChange);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [initialPayload.attempt_id, initialPayload.fullscreen_required, initialPayload.status, triggerViolation]);
+  }, [initialPayload.attempt_id, initialPayload.fullscreen_required, isViolationOverlayOpen]);
 
-  const handleReturnToFullscreen = useCallback(async () => {
-    if (document.documentElement.requestFullscreen) {
-      await document.documentElement.requestFullscreen();
-    }
-    if (document.fullscreenElement !== null) {
+  // Violation Recovery / Re-enter Fullscreen
+  const handleReturnToFullscreen = async () => {
+    try {
+      if (!document.fullscreenElement) {
+        await document.documentElement.requestFullscreen();
+      }
       setIsViolationOverlayOpen(false);
       setViolationStartedAt(null);
       await resolveExamEventAction(initialPayload.attempt_id);
+    } catch {
+      // Ignored
     }
-  }, [initialPayload.attempt_id]);
-
-  const handleAutoSubmitOnViolation = useCallback(async () => {
-    if (isSubmitting || isAutoSubmittingOnViolation) return;
-    setIsAutoSubmittingOnViolation(true);
-    await handlePerformSubmit("fullscreen_violation");
-  }, [handlePerformSubmit, isAutoSubmittingOnViolation, isSubmitting]);
-
-  // Format Timer String
-  const formatTime = (totalSec: number) => {
-    const hours = Math.floor(totalSec / 3600);
-    const mins = Math.floor((totalSec % 3600) / 60);
-    const secs = totalSec % 60;
-    if (hours > 0) {
-      return `${hours.toString().padStart(2, "0")}:${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
-    }
-    return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
   };
 
-  // Debounce save queue
+  // Violation Auto-Submit
+  const handleAutoSubmitOnViolation = async () => {
+    setIsAutoSubmittingOnViolation(true);
+    await handlePerformSubmit("fullscreen_violation");
+  };
+
+  // Autosave Answer Logic
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  const triggerSave = useCallback(
-    (questionId: string, selectedOptionId: string | null, isMarked: boolean) => {
-      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+  const triggerAutosave = useCallback(
+    (questionId: string, optionId: string | null, isMarked: boolean) => {
       setSaveStatus("saving");
       setSaveErrorMessage(null);
+
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
 
       saveTimeoutRef.current = setTimeout(async () => {
         const res = await saveAnswerAction({
           attemptId: initialPayload.attempt_id,
           questionId,
-          selectedOptionId,
+          selectedOptionId: optionId,
           isMarked,
         });
 
         if (res.success) {
           setSaveStatus("saved");
+          setTimeout(() => setSaveStatus("idle"), 2000);
         } else {
           setSaveStatus("error");
-          setSaveErrorMessage(res.error || "Không thể lưu đáp án.");
+          setSaveErrorMessage(res.error || "Lỗi lưu đáp án");
         }
-      }, 400);
+      }, 300);
     },
     [initialPayload.attempt_id]
   );
 
-  // Current Question
-  const currentQuestion: FlatQuestion | undefined = flatQuestions[currentIndex - 1] ?? flatQuestions[0];
-  const currentAnswer = currentQuestion ? userAnswers[currentQuestion.id] : undefined;
-
-  // Handle Option Select
   const handleSelectOption = (optionId: string) => {
-    if (!currentQuestion || isSubmitting) return;
+    const currentQ = flatQuestions[currentIndex - 1];
+    if (!currentQ) return;
 
-    const newOptionId = currentAnswer?.selectedOptionId === optionId ? null : optionId;
-    const isMarked = currentAnswer?.isMarked || false;
+    const currentMarked = userAnswers[currentQ.id]?.isMarked || false;
+    const nextOptionId = optionId;
 
     setUserAnswers((prev) => ({
       ...prev,
-      [currentQuestion.id]: {
-        selectedOptionId: newOptionId,
-        isMarked,
+      [currentQ.id]: {
+        selectedOptionId: nextOptionId,
+        isMarked: currentMarked,
       },
     }));
 
-    triggerSave(currentQuestion.id, newOptionId, isMarked);
+    triggerAutosave(currentQ.id, nextOptionId, currentMarked);
   };
 
-  // Handle Toggle Mark
   const handleToggleMark = () => {
-    if (!currentQuestion || isSubmitting) return;
+    const currentQ = flatQuestions[currentIndex - 1];
+    if (!currentQ) return;
 
-    const selectedOptionId = currentAnswer?.selectedOptionId || null;
-    const newIsMarked = !currentAnswer?.isMarked;
+    const currentOpt = userAnswers[currentQ.id]?.selectedOptionId || null;
+    const nextMarked = !userAnswers[currentQ.id]?.isMarked;
 
     setUserAnswers((prev) => ({
       ...prev,
-      [currentQuestion.id]: {
-        selectedOptionId,
-        isMarked: newIsMarked,
+      [currentQ.id]: {
+        selectedOptionId: currentOpt,
+        isMarked: nextMarked,
       },
     }));
 
-    triggerSave(currentQuestion.id, selectedOptionId, newIsMarked);
+    triggerAutosave(currentQ.id, currentOpt, nextMarked);
   };
 
-  // Nav Items for Navigator
+  // Navigation Items
   const navItems: QuestionNavItem[] = useMemo(() => {
-    return flatQuestions.map((q) => {
-      const ans = userAnswers[q.id];
-      return {
-        id: q.id,
-        index: q.globalIndex,
-        sectionTitle: q.sectionTitle,
-        isAnswered: Boolean(ans?.selectedOptionId),
-        isMarked: Boolean(ans?.isMarked),
-      };
-    });
+    return flatQuestions.map((q) => ({
+      id: q.id,
+      index: q.globalIndex,
+      sectionTitle: q.sectionTitle,
+      isAnswered: Boolean(userAnswers[q.id]?.selectedOptionId),
+      isMarked: Boolean(userAnswers[q.id]?.isMarked),
+    }));
   }, [flatQuestions, userAnswers]);
 
-  // Unanswered count
   const answeredCount = useMemo(() => {
-    return Object.values(userAnswers).filter((a) => Boolean(a.selectedOptionId)).length;
+    return Object.values(userAnswers).filter((ans) => Boolean(ans.selectedOptionId)).length;
   }, [userAnswers]);
 
   const unansweredCount = flatQuestions.length - answeredCount;
+  const currentQuestion = flatQuestions[currentIndex - 1];
+  const currentAnswer = currentQuestion ? userAnswers[currentQuestion.id] : undefined;
+
+  const formatTime = (secs: number) => {
+    const m = Math.floor(secs / 60);
+    const s = secs % 60;
+    return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  };
 
   if (flatQuestions.length === 0 || !currentQuestion) {
     return (
-      <div className="mx-auto flex min-h-[60vh] max-w-xl flex-col items-center justify-center p-6 text-center">
+      <div className="mx-auto flex min-h-[60vh] max-w-xl flex-col items-center justify-center p-6 text-center text-[var(--foreground)]">
         <AlertTriangle className="h-12 w-12 text-amber-500 mb-4" />
-        <h2 className="text-xl font-bold">Không có câu hỏi</h2>
+        <h2 className="text-xl font-bold text-[var(--foreground)]">Không có câu hỏi</h2>
         <p className="text-sm text-[var(--muted-foreground)] mt-2">Đề thi này chưa có nội dung câu hỏi.</p>
-        <Button className="mt-6" onClick={() => router.push("/exams")}>Quay lại danh sách đề thi</Button>
+        <Button className="mt-6 bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white rounded-xl" onClick={() => router.push("/exams")}>
+          Quay lại danh sách đề thi
+        </Button>
       </div>
     );
   }
 
   return (
-    <main className="min-h-screen bg-slate-50 dark:bg-slate-950 pb-16">
+    <main className="min-h-screen bg-cyber-grid bg-[var(--background)] text-[var(--foreground)] pb-16 transition-colors duration-200">
       {/* Sticky Header */}
-      <header className="sticky top-0 z-20 border-b bg-white/95 backdrop-blur dark:bg-slate-900/95 shadow-sm">
-        <div className="mx-auto flex min-h-16 w-full max-w-6xl flex-col gap-3 px-4 py-3 md:flex-row md:items-center md:justify-between">
+      <header className="sticky top-0 z-20 border-b border-[var(--border)] bg-[var(--background)]/95 backdrop-blur-md shadow-md">
+        <div className="mx-auto flex min-h-18 w-full max-w-7xl flex-col gap-3 px-4 py-3 md:flex-row md:items-center md:justify-between">
           <div>
-            <p className="text-xs text-[var(--muted-foreground)]">Đang làm bài thi</p>
-            <h1 className="font-semibold text-base md:text-lg line-clamp-1">{initialPayload.exam_title}</h1>
+            <p className="text-xs font-semibold text-[var(--primary)] flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full bg-[var(--primary)] animate-pulse"></span> Đang làm bài thi
+            </p>
+            <h1 className="font-bold text-base md:text-lg text-[var(--foreground)] line-clamp-1">{initialPayload.exam_title}</h1>
           </div>
 
           <div className="flex flex-wrap items-center gap-4 text-sm">
             {/* Timer */}
             <div
-              className={`flex items-center gap-1.5 font-mono font-bold text-base px-3 py-1.5 rounded-md border ${
+              className={`flex items-center gap-1.5 font-mono font-bold text-base px-3.5 py-1.5 rounded-xl border ${
                 remainingSeconds < 300
-                  ? "bg-red-50 text-red-600 border-red-200 animate-pulse dark:bg-red-950 dark:text-red-300"
-                  : "bg-slate-100 text-slate-800 border-slate-200 dark:bg-slate-800 dark:text-slate-200"
+                  ? "bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/40 animate-pulse"
+                  : "bg-[var(--surface)] border-[var(--border)] text-amber-600 dark:text-amber-400"
               }`}
             >
               <Clock className="h-4 w-4" />
@@ -344,13 +336,13 @@ export function ExamTakingUI({ initialPayload }: ExamTakingUIProps) {
                 </span>
               )}
               {saveStatus === "error" && (
-                <span className="inline-flex items-center gap-1 text-red-600 dark:text-red-400">
+                <span className="inline-flex items-center gap-1 text-rose-600 dark:text-rose-400">
                   <AlertTriangle className="h-3.5 w-3.5" /> {saveErrorMessage || "Lưu thất bại"}
                 </span>
               )}
               {saveStatus === "idle" && (
                 <span className="inline-flex items-center gap-1">
-                  <Save className="h-3.5 w-3.5" /> Đã đồng bộ
+                  <Save className="h-3.5 w-3.5 text-[var(--primary)]" /> Đã đồng bộ
                 </span>
               )}
             </div>
@@ -358,7 +350,7 @@ export function ExamTakingUI({ initialPayload }: ExamTakingUIProps) {
             {/* Submit Button */}
             <Button
               variant="default"
-              className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium"
+              className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl shadow-lg shadow-emerald-600/25"
               onClick={() => setIsSubmitDialogOpen(true)}
               disabled={isSubmitting}
             >
@@ -369,12 +361,12 @@ export function ExamTakingUI({ initialPayload }: ExamTakingUIProps) {
       </header>
 
       {/* Main Content Layout */}
-      <div className="mx-auto grid w-full max-w-6xl gap-6 px-4 py-6 lg:grid-cols-[1fr_300px]">
+      <div className="mx-auto grid w-full max-w-7xl gap-6 px-4 py-6 lg:grid-cols-[1fr_320px]">
         {/* Left Column: Question Area */}
         <section className="space-y-4">
-          <div className="flex items-center justify-between gap-3 bg-white dark:bg-slate-900 p-3 rounded-lg border">
+          <div className="flex items-center justify-between gap-3 bg-[var(--card)] p-4 rounded-2xl border border-[var(--border)] shadow-md">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+              <p className="text-xs font-semibold uppercase tracking-wider text-[var(--primary)]">
                 {currentQuestion.sectionTitle}
               </p>
               <p className="text-xs text-[var(--muted-foreground)] mt-0.5">
@@ -386,7 +378,7 @@ export function ExamTakingUI({ initialPayload }: ExamTakingUIProps) {
               variant={currentAnswer?.isMarked ? "default" : "outline"}
               size="sm"
               onClick={handleToggleMark}
-              className={currentAnswer?.isMarked ? "bg-amber-500 hover:bg-amber-600 text-white" : ""}
+              className={currentAnswer?.isMarked ? "bg-amber-500 hover:bg-amber-600 text-white rounded-xl" : "border-[var(--border)] bg-[var(--surface)] text-[var(--foreground)] hover:bg-[var(--surface-hover)] rounded-xl"}
             >
               <Flag className="h-4 w-4 mr-1.5" />
               {currentAnswer?.isMarked ? "Đã đánh dấu" : "Đánh dấu"}
@@ -394,10 +386,10 @@ export function ExamTakingUI({ initialPayload }: ExamTakingUIProps) {
           </div>
 
           {/* Question Card */}
-          <Card className="shadow-sm">
-            <CardHeader className="pb-3 border-b bg-slate-50/50 dark:bg-slate-900/50">
+          <Card className="border-[var(--border)] bg-[var(--card)] shadow-lg rounded-2xl">
+            <CardHeader className="pb-3 border-b border-[var(--divider)]">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-lg font-bold flex items-center gap-2">
+                <CardTitle className="text-lg font-bold flex items-center gap-2 text-[var(--foreground)]">
                   <span>Câu {currentQuestion.globalIndex}</span>
                   <span className="text-xs font-normal text-[var(--muted-foreground)]">
                     ({currentQuestion.score} điểm)
@@ -408,18 +400,18 @@ export function ExamTakingUI({ initialPayload }: ExamTakingUIProps) {
 
             <CardContent className="space-y-6 pt-5">
               {/* Question Text */}
-              <div className="text-base font-medium leading-relaxed whitespace-pre-line text-slate-900 dark:text-slate-100">
+              <div className="text-base font-medium leading-relaxed whitespace-pre-line text-[var(--foreground)]">
                 {currentQuestion.content}
               </div>
 
               {/* Question Image if present */}
               {currentQuestion.image_path && (
-                <div className="my-4 overflow-hidden rounded-md border">
+                <div className="my-4 overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--card-secondary)] p-2">
                   {/* eslint-disable-next-html-element-suppression */}
                   <img
                     src={currentQuestion.image_path}
                     alt={`Hình minh họa câu ${currentQuestion.globalIndex}`}
-                    className="max-h-96 object-contain"
+                    className="max-h-96 object-contain mx-auto rounded-lg"
                   />
                 </div>
               )}
@@ -433,24 +425,25 @@ export function ExamTakingUI({ initialPayload }: ExamTakingUIProps) {
                   return (
                     <label
                       key={opt.id}
-                      onClick={() => handleSelectOption(opt.id)}
-                      className={`flex min-h-12 cursor-pointer items-center gap-3.5 rounded-lg border p-4 text-sm font-medium transition-all ${
+                      className={`flex min-h-13 cursor-pointer items-center gap-3.5 rounded-xl border p-4 text-sm font-medium transition-all duration-200 select-none ${
                         isSelected
-                          ? "border-primary bg-primary/5 text-primary ring-2 ring-primary/20 font-semibold"
-                          : "border-slate-200 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-900"
+                          ? "border-[var(--primary)] bg-[var(--primary)]/10 text-[var(--foreground)] ring-1 ring-[var(--primary)]/50 shadow-md shadow-blue-500/10"
+                          : "border-[var(--border)] bg-[var(--surface)] hover:border-[var(--border-subtle)] hover:bg-[var(--surface-hover)] text-[var(--foreground)]"
                       }`}
                     >
                       <input
                         type="radio"
                         name={`question-${currentQuestion.id}`}
                         checked={isSelected}
-                        onChange={() => {}} // handled by label onClick
-                        className="h-4 w-4 text-primary focus:ring-primary"
+                        onChange={() => handleSelectOption(opt.id)}
+                        className="h-4 w-4 text-[var(--primary)] focus:ring-[var(--ring)] accent-[var(--primary)]"
                       />
-                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                      <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-xs font-bold ${
+                        isSelected ? "bg-[var(--primary)] text-white" : "bg-[var(--surface-hover)] text-[var(--foreground)] border border-[var(--border)]"
+                      }`}>
                         {optionLetter}
                       </span>
-                      <span className="flex-1 text-slate-800 dark:text-slate-200">{opt.content}</span>
+                      <span className="flex-1">{opt.content}</span>
                     </label>
                   );
                 })}
@@ -464,11 +457,12 @@ export function ExamTakingUI({ initialPayload }: ExamTakingUIProps) {
               variant="outline"
               onClick={() => setCurrentIndex((prev) => Math.max(1, prev - 1))}
               disabled={currentIndex <= 1}
+              className="border-[var(--border)] bg-[var(--surface)] text-[var(--foreground)] hover:bg-[var(--surface-hover)] rounded-xl"
             >
               Câu trước
             </Button>
 
-            <span className="text-xs text-[var(--muted-foreground)]">
+            <span className="text-xs text-[var(--muted-foreground)] font-mono">
               {currentIndex} / {flatQuestions.length}
             </span>
 
@@ -476,6 +470,7 @@ export function ExamTakingUI({ initialPayload }: ExamTakingUIProps) {
               variant="default"
               onClick={() => setCurrentIndex((prev) => Math.min(flatQuestions.length, prev + 1))}
               disabled={currentIndex >= flatQuestions.length}
+              className="bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white rounded-xl shadow-md shadow-blue-600/20"
             >
               Câu tiếp theo
             </Button>
@@ -484,9 +479,9 @@ export function ExamTakingUI({ initialPayload }: ExamTakingUIProps) {
 
         {/* Right Column: Question Navigator */}
         <aside className="space-y-4">
-          <Card className="shadow-sm">
-            <CardHeader className="pb-3 border-b">
-              <CardTitle className="text-base font-semibold">Điều hướng câu hỏi</CardTitle>
+          <Card className="border-[var(--border)] bg-[var(--card)] shadow-lg rounded-2xl">
+            <CardHeader className="pb-3 border-b border-[var(--divider)]">
+              <CardTitle className="text-base font-bold text-[var(--foreground)]">Điều hướng câu hỏi</CardTitle>
             </CardHeader>
             <CardContent className="p-4">
               <QuestionNavigator
@@ -501,24 +496,24 @@ export function ExamTakingUI({ initialPayload }: ExamTakingUIProps) {
 
       {/* Confirmation Modal for Submitting */}
       {isSubmitDialogOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs animate-in fade-in">
-          <div className="w-full max-w-md rounded-lg border bg-white p-6 shadow-lg dark:bg-slate-900 space-y-4">
-            <h3 className="text-lg font-bold">Xác nhận nộp bài</h3>
+        <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-xs animate-in fade-in">
+          <div className="w-full max-w-md rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-6 shadow-2xl space-y-4 text-[var(--foreground)]">
+            <h3 className="text-lg font-bold text-[var(--foreground)]">Xác nhận nộp bài</h3>
 
             {unansweredCount > 0 ? (
-              <p className="text-sm text-slate-600 dark:text-slate-400">
-                Bạn còn <strong className="text-amber-600 font-semibold">{unansweredCount} câu chưa trả lời</strong>.
+              <p className="text-sm text-[var(--muted-foreground)]">
+                Bạn còn <strong className="text-amber-600 dark:text-amber-400 font-semibold">{unansweredCount} câu chưa trả lời</strong>.
                 Sau khi nộp bài, bạn sẽ không thể tiếp tục làm bài. Bạn có chắc chắn muốn nộp bài không?
               </p>
             ) : (
-              <p className="text-sm text-slate-600 dark:text-slate-400">
+              <p className="text-sm text-[var(--muted-foreground)]">
                 Bạn đã trả lời tất cả các câu hỏi. Sau khi nộp bài, bạn sẽ không thể tiếp tục chỉnh sửa đáp án.
               </p>
             )}
 
             {submitError && (
-              <div className="flex items-center gap-2 rounded-md bg-red-50 p-3 text-xs text-red-700 dark:bg-red-950 dark:text-red-300">
-                <AlertTriangle className="h-4 w-4 shrink-0" />
+              <div className="flex items-center gap-2 rounded-xl bg-rose-500/10 border border-rose-500/30 p-3 text-xs text-rose-600 dark:text-rose-300">
+                <AlertTriangle className="h-4 w-4 shrink-0 text-rose-500" />
                 <span>{submitError}</span>
               </div>
             )}
@@ -531,12 +526,13 @@ export function ExamTakingUI({ initialPayload }: ExamTakingUIProps) {
                   setSubmitError(null);
                 }}
                 disabled={isSubmitting}
+                className="border-[var(--border)] text-[var(--foreground)] hover:bg-[var(--surface-hover)] rounded-xl"
               >
                 Hủy
               </Button>
               <Button
                 variant="default"
-                className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                className="bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl shadow-md shadow-emerald-600/20 font-bold"
                 onClick={() => handlePerformSubmit("student_submit")}
                 disabled={isSubmitting}
               >

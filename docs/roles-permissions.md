@@ -1,175 +1,174 @@
-# Roles And Permissions
+# Phân Quyền & Kiểm Soát Truy Cập (Roles & Permissions)
 
-- Ngay cap nhat: 2026-08-01
-- Phien ban: 0.1
-- Trang thai: Draft
+- **Ngày cập nhật**: 2026-08-22
+- **Phiên bản**: 1.0
+- **Trạng thái**: Đã nghiệm thu & Hoạt động
 
-## Muc Luc
+---
 
-1. Nhom truy cap
-2. Ma tran phan quyen theo chuc nang
-3. Ma tran phan quyen theo du lieu
-4. Route va redirect
-5. Tai khoan va role
-6. Supabase RLS
-7. Thao tac server-only
-8. Tan cong can ngan chan
-9. Acceptance criteria
+## Mục Lục
 
-## 1. Nhom Truy Cap
+1. [Các nhóm vai trò người dùng (Roles)](#1-các-nhóm-vai-trò-người-dùng-roles)
+2. [Ma trận phân quyền chức năng](#2-ma-trận-phân-quyền-chức-năng)
+3. [Ma trận phân quyền dữ liệu (CRUD & RLS)](#3-ma-trận-phân-quyền-dữ-liệu-crud--rls)
+4. [Cấu trúc Route & Quy tắc chuyển hướng](#4-cấu-trúc-route--quy-tắc-chuyển-hướng)
+5. [Quy tắc bảo mật tài khoản & Vai trò](#5-quy-tắc-bảo-mật-tài-khoản--vai-trò)
+6. [Chính sách Supabase Row Level Security (RLS)](#6-chính-sách-supabase-row-level-security-rls)
+7. [Các thao tác đặc quyền phía máy chủ (Server-Only / RPC)](#7-các-thao-tác-đặc-quyền-phía-máy-chủ-server-only--rpc)
+8. [Các lỗ hổng bảo mật đã được phòng chống](#8-các-lỗ-hổng-bảo-mật-đã-được-phòng-chống)
 
-| Role | Mo ta | Nguon xac dinh |
+---
+
+## 1. Các Nhóm Vai Trò Người Dùng (Roles)
+
+Hệ thống quản lý người dùng dựa trên 3 nhóm vai trò cơ bản:
+
+| Vai trò | Mô tả | Nguồn gốc định danh |
 | --- | --- | --- |
-| Guest | Chua dang nhap, chi doc du lieu public va lam de Guest neu duoc phep | Khong co session |
-| Student | Nguoi hoc da dang nhap, role `student`, tai khoan khong bi khoa | `profiles.role` doc tu server |
-| Admin | Quan tri vien, role `admin`, tao bang quy trinh server/service role | `profiles.role` doc tu server |
+| **Guest (Khách)** | Người dùng vãng lai chưa đăng nhập | Không có phiên Supabase Auth; nhận diện qua cookie hash tạm thời |
+| **Student (Học sinh)** | Thí sinh có tài khoản hợp lệ | `auth.users` kết hợp bản ghi `profiles` có `role = 'student'` |
+| **Admin (Quản trị viên)** | Người quản trị hệ thống | `auth.users` kết hợp bản ghi `profiles` có `role = 'admin'` |
 
-An nut tren giao dien khong duoc xem la bao mat. Role gui tu client khong dang tin cay. Moi route/API/server action phai kiem tra role tu session server va RLS.
+> [!IMPORTANT]
+> **Nguyên tắc bảo mật cốt lõi**:
+> - Việc ẩn nút trên giao diện chỉ mang tính chất trải nghiệm (UX), không được xem là giải pháp bảo mật.
+> - Vai trò gửi từ client hoàn toàn không đáng tin cậy. Mọi thao tác đều được kiểm tra vai trò tại máy chủ (`requireRole`) và bảo vệ bằng PostgreSQL Row Level Security (RLS).
 
-## 2. Ma Tran Phan Quyen Theo Chuc Nang
+---
 
-| Chuc nang | Guest | Student | Admin |
+## 2. Ma Trận Phân Quyền Chức Năng
+
+| Chức năng hệ thống | Guest | Student (Active) | Student (Locked) | Admin |
+| --- | :---: | :---: | :---: | :---: |
+| Xem trang chủ & danh mục đề công khai | Cho phép | Cho phép | Cho phép | Cho phép |
+| Tìm kiếm, lọc đề thi | Cho phép | Cho phép | Cho phép | Cho phép |
+| Làm đề thi cho phép thi thử (`allow_guest_attempt = true`) | Cho phép | Cho phép | Từ chối | Cho phép |
+| Làm đề thi dành riêng cho học sinh (`access_type = students_only`) | Từ chối | Cho phép | Từ chối | Cho phép (Preview) |
+| Làm đề thi nội bộ (`access_type = private`) | Từ chối | Từ chối | Từ chối | Cho phép (Preview) |
+| Lưu đáp án tự động & Nộp bài thi | Phỏng thi tạm | Bài thi cá nhân | Từ chối | Quản trị |
+| Xem kết quả & Lời giải sau khi nộp (theo cấu hình đề) | Bài vừa làm | Lịch sử cá nhân | Chỉ xem lại bài cũ | Toàn bộ thí sinh |
+| Xem lịch sử thi cá nhân (`/student/history`) | Từ chối | Cho phép | Từ chối | Toàn bộ lịch sử |
+| Quản lý môn học, danh mục, đề thi | Từ chối | Từ chối | Từ chối | Toàn quyền (CRUD) |
+| Tải ảnh câu hỏi lên máy chủ | Từ chối | Từ chối | Từ chối | Cho phép |
+| Xóa đề thi (xóa mềm liên đới & kết thúc bài thi dở) | Từ chối | Từ chối | Từ chối | Cho phép |
+| Khóa / Mở khóa tài khoản học sinh | Từ chối | Từ chối | Từ chối | Cho phép |
+| Tra cứu & Reset lượt thi của thí sinh | Từ chối | Từ chối | Từ chối | Cho phép |
+| Quản lý & Tải lên tài liệu ôn tập | Chỉ xem công khai | Xem tài liệu được cấp | Xem tài liệu công khai | Toàn quyền (CRUD) |
+
+---
+
+## 3. Ma Trận Phân Quyền Dữ Liệu (CRUD & RLS)
+
+| Bảng dữ liệu | Guest | Student | Admin |
 | --- | --- | --- | --- |
-| Xem trang chu | Allow | Allow | Allow |
-| Xem de public | Allow | Allow | Allow |
-| Lam de Guest-enabled | Allow | Allow | Allow |
-| Xem lich su dai han | Deny | Own only | Read aggregate/all |
-| Bat dau de `private` | Deny | Deny trong MVP | Allow preview/admin |
-| Quan ly ho so | Deny | Own only | Lock/unlock Student |
-| Quan ly subject/category/exam | Deny | Deny | Allow |
-| Quan ly cau hoi/dap an dung | Deny | Deny | Allow khi exam `draft`; read-only khi exam da co attempt |
-| Upload anh cau hoi | Deny | Deny | Allow |
-| Xem dap an dung truoc khi nop | Deny | Deny | Allow |
-| Xem attempt nguoi khac | Deny | Deny | Allow |
-| Quan ly tai lieu public | Deny | Deny | Allow |
+| `profiles` | Không đọc | Đọc & sửa thông tin cá nhân (không được sửa `role`/`status`) | Xem danh sách học sinh, khóa/mở khóa qua RPC |
+| `subjects` | Đọc môn học đang kích hoạt | Đọc môn học đang kích hoạt | Toàn quyền CRUD |
+| `exam_categories` | Đọc danh mục đang kích hoạt | Đọc danh mục đang kích hoạt | Toàn quyền CRUD |
+| `exams` | Đọc đề `published` + `public` | Đọc đề `published` (`public` và `students_only`) | Toàn quyền CRUD |
+| `exam_sections` | Đọc phần thi của đề được phép | Đọc phần thi của đề được phép | Toàn quyền CRUD |
+| `questions` | Đọc câu hỏi qua View/RPC (không lộ đáp án đúng) | Đọc câu hỏi qua View/RPC (không lộ đáp án đúng) | Toàn quyền CRUD |
+| `question_options` | Đọc lựa chọn qua View/RPC (ẩn `is_correct`) | Đọc lựa chọn qua View/RPC (ẩn `is_correct`) | Toàn quyền CRUD |
+| `exam_attempts` | Đọc/ghi lượt thi của chính mình qua token hash | Đọc/ghi lượt thi của chính mình (`student_id = auth.uid()`) | Đọc toàn bộ, reset lượt thi |
+| `attempt_answers` | Ghi đáp án cho lượt thi của mình khi `in_progress` | Ghi đáp án cho lượt thi của mình khi `in_progress` | Đọc toàn bộ |
+| `exam_events` | Ghi sự kiện phòng thi của mình | Ghi sự kiện phòng thi của mình | Đọc toàn bộ |
+| `documents` | Đọc tài liệu công khai (`status = published`, `is_public = true`) | Đọc tài liệu được phép | Toàn quyền CRUD |
 
-## 3. Ma Tran Phan Quyen Theo Du Lieu
+---
 
-| Bang | Guest | Student | Admin |
-| --- | --- | --- | --- |
-| `profiles` | Khong doc | Doc/cap nhat ho so minh, khong sua role | Doc list Student, khoa/mo; khong tu nang role qua client |
-| `subjects` | Doc active co exam public | Doc active | CRUD |
-| `exam_categories` | Doc active co exam public | Doc active | CRUD |
-| `exams` | Doc `published` + `public` fields | Doc `published` + `public`/`students_only`; khong doc `private` trong MVP | CRUD |
-| `exam_sections` | Doc cua exam duoc phep | Doc cua exam duoc phep | CRUD |
-| `questions` | Doc noi dung cau hoi cua attempt hop le, khong doc dap an dung | Tuong tu Guest/own attempt | CRUD |
-| `question_options` | Doc option khong co `is_correct` khi chua nop | Tuong tu Guest | CRUD gom `is_correct` |
-| `exam_attempts` | Chi phien Guest cua minh qua signed guest token hash | Own only | Read all |
-| `attempt_answers` | Chi attempt Guest cua minh qua signed guest token hash | Own only khi in_progress | Read all |
-| `exam_events` | Ghi event cho phien hop le | Ghi event own attempt | Read all |
-| `documents` | Doc published public | Doc published/duoc phep | CRUD |
+## 4. Cấu Trúc Route & Quy Tắc Chuyển Hướng
 
-## 4. Route Va Redirect
+### Danh mục Route
 
-### Route cong khai
+- **Route Công khai (Public)**:
+  - `/` (Trang chủ)
+  - `/exams` (Thư viện đề thi)
+  - `/exams/[slug]` (Chi tiết đề thi)
+  - `/documents` (Thư viện tài liệu)
+  - `/login` (Đăng nhập)
+  - `/register` (Đăng ký)
+  - `/attempts/[attemptId]` (Màn hình làm bài)
+  - `/attempts/[attemptId]/result` (Màn hình kết quả bài thi)
+  - `/account-locked` (Thông báo tài khoản bị khóa)
 
-- `/`
-- `/exams`
-- `/exams/[slug]`
-- `/documents`
-- `/login`
-- `/register`
-- `/attempts/guest/[attemptId]` neu de cho phep Guest
+- **Route Học sinh (Student Area)**:
+  - `/student` (Bảng điều khiển học sinh)
+  - `/student/history` (Lịch sử làm bài & kết quả)
+  - `/student/profile` (Thông tin tài khoản)
 
-### Route Student
+- **Route Quản trị viên (Admin Portal)**:
+  - `/admin` (Bảng điều khiển tổng quan)
+  - `/admin/exams` (Danh sách đề thi)
+  - `/admin/exams/new` (Tạo đề thi mới)
+  - `/admin/exams/[examId]` (Trình soạn thảo đề thi - Exam Builder)
+  - `/admin/students` (Quản lý học sinh & khóa tài khoản)
+  - `/admin/attempts` (Quản lý lượt thi & reset bài)
+  - `/admin/subjects` (Quản lý môn học)
+  - `/admin/categories` (Quản lý danh mục)
+  - `/admin/documents` (Quản lý kho tài liệu)
 
-- `/student`
-- `/student/profile`
-- `/student/history`
-- `/attempts/[attemptId]`
-- `/attempts/[attemptId]/result`
+### Bảng Quy Tắc Chuyển Hướng (Redirect Rules)
 
-### Route Admin
-
-- `/admin`
-- `/admin/subjects`
-- `/admin/categories`
-- `/admin/exams`
-- `/admin/exams/[examId]`
-- `/admin/exams/[examId]/sections`
-- `/admin/exams/[examId]/questions`
-- `/admin/attempts`
-- `/admin/students`
-- `/admin/documents`
-
-### Quy tac redirect
-
-| Tinh huong | Redirect |
+| Tình huống truy cập | Hành động & Đích chuyển hướng |
 | --- | --- |
-| Guest vao route Student/Admin | `/login?next=...` |
-| Student vao route Admin | `/student` kem thong bao khong co quyen |
-| Admin vao route Student khong can thiet | `/admin` |
-| User da dang nhap vao `/login` | Student -> `/student`, Admin -> `/admin` |
-| Tai khoan bi khoa | `/account-locked` va dang xuat session neu can |
+| Khách truy cập Route Student hoặc Admin | Chuyển hướng về `/login?next=...` |
+| Học sinh truy cập Route Admin (`/admin/*`) | Chuyển hướng về `/student` kèm thông báo không đủ thẩm quyền |
+| Quản trị viên truy cập màn hình đăng nhập `/login` | Chuyển hướng trực tiếp vào `/admin` |
+| Học sinh truy cập màn hình đăng nhập `/login` | Chuyển hướng trực tiếp vào `/student` |
+| Tài khoản học sinh đang bị khóa (`status = locked`) | Chuyển hướng về trang `/account-locked` |
 
-## 5. Tai Khoan Va Role
+---
 
-- Tai khoan bi khoa: `profiles.status = locked`; khong duoc bat dau attempt moi, khong duoc autosave, khong duoc submit chu dong. Khi Admin khoa Student, attempt `in_progress` cua Student do phai duoc server auto-submit voi `status = auto_submitted`, `submit_reason = account_locked`, cham cac answer da duoc server ack truoc thoi diem khoa, va ghi audit event `account_locked`. Mo khoa khong mo lai attempt da final.
-- Guest ownership: server tao signed httpOnly cookie/token tam thoi, chi luu `guest_session_hash` trong database, va moi API Guest phai so khop hash nay voi attempt. Biet `attemptId` khong du de doc/sua attempt Guest.
-- Tao Admin: chi thuc hien bang migration seed, Supabase dashboard co kiem soat, hoac server action dung service role. Khong co UI cho user tu tao Admin trong MVP.
-- Khong tu nang role: client khong duoc ghi `profiles.role`; RLS tu choi update role/status neu khong qua service role/server action duoc kiem quyen.
+## 5. Quy Tắc Bảo Mật Tài Khoản & Vai Trò
 
-## 6. Supabase RLS
+1. **Khóa tài khoản học sinh**:
+   - Khi quản trị viên thực hiện khóa tài khoản qua hàm `admin_lock_student`, tài khoản chuyển sang trạng thái `locked`.
+   - Nếu học sinh đang có bài thi ở trạng thái `in_progress`, hệ thống tự động kết thúc bài thi với `status = 'auto_submitted'`, `submit_reason = 'account_locked'` và chấm điểm các câu đã được hệ thống xác nhận trước đó.
+   - Học sinh bị khóa không thể tạo bài thi mới và không thể lưu thêm đáp án.
+2. **Khách làm bài thi (Guest Session)**:
+   - Sử dụng cơ chế mã hóa `guest_session_hash` được lưu trữ an toàn trong cookie HTTP-only.
+   - Thao tác nộp bài và lưu đáp án bắt buộc phải khớp với hash này; việc biết `attemptId` không đủ để can thiệp vào bài thi của người khác.
+3. **Chống tự nâng quyền (Privilege Escalation)**:
+   - Các API cập nhật hồ sơ cá nhân chỉ cho phép thay đổi `display_name`, hoàn toàn bỏ qua các trường `role` và `status` từ payload của client.
 
-RLS chi tiet phai duoc cai dat trong migration, tham chieu schema tai [database-schema.md](./database-schema.md).
+---
 
-| Bang | Select | Insert | Update | Delete |
-| --- | --- | --- | --- | --- |
-| `profiles` | Own profile; Admin read students | Trigger tao profile; service role | Own non-role fields; Admin lock/unlock qua server | Soft delete only |
-| `subjects` | Active public for Guest/Student; Admin all | Admin | Admin | Admin soft delete |
-| `exam_categories` | Active public for Guest/Student; Admin all | Admin | Admin | Admin soft delete |
-| `exams` | Published public/allowed | Admin | Admin | Admin soft delete |
-| `exam_sections` | Sections of allowed exam | Admin khi exam `draft` hoac read-only khi da publish/co attempt | Admin khi exam `draft`; bi khoa khi publish/co attempt | Admin soft delete khi exam `draft` |
-| `questions` | Allowed attempt view excludes correct-answer fields via view/RPC | Admin khi exam `draft` hoac read-only khi da publish/co attempt | Admin khi exam `draft`; bi khoa khi publish/co attempt | Admin soft delete khi exam `draft` |
-| `question_options` | Allowed attempt view excludes `is_correct` via view/RPC | Admin khi exam `draft` hoac read-only khi da publish/co attempt | Admin khi exam `draft`; bi khoa khi publish/co attempt | Admin soft delete khi exam `draft` |
-| `exam_attempts` | Owner Student or Guest session; Admin | Server action/RPC | Server action/RPC only | No hard delete |
-| `attempt_answers` | Owner attempt; Admin | Owner in_progress via RPC upsert | Owner in_progress via RPC upsert | No delete after submit |
-| `exam_events` | Admin; owner limited event list if needed | Owner/server event RPC | Server only resolve fields | No delete |
-| `documents` | Published public; Admin all | Admin | Admin | Admin soft delete |
+## 6. Chính Sách Supabase Row Level Security (RLS)
 
-Student khong duoc doc truong chua dap an dung. Nen dung view/RPC rieng cho man hinh lam bai thay vi select truc tiep bang `question_options`.
+- **`public.is_admin()` Function**: Kiểm tra quyền quản trị viên an toàn bằng cách truy vấn bảng `profiles` với `auth.uid()`, có cơ chế caching cấp session.
+- **`public_exam_catalog` View**: View trung gian an toàn (`security_invoker = true`) cho phép truy vấn metadata của đề thi mà không chứa dữ liệu nhạy cảm.
+- **Chính sách phân tách đáp án đúng**:
+  ```sql
+  -- Khách và học sinh không thể đọc trực tiếp trường is_correct
+  create policy "Admins can manage options" on public.question_options
+  for all to authenticated
+  using (public.is_admin())
+  with check (public.is_admin());
+  ```
 
-Admin khong duoc sua du lieu anh huong ket qua sau khi exam `published`: section/question/option, dap an dung, diem cau hoi, thu tu, duration va random config. Exam `published` chua co attempt co the dua ve `draft`; exam da co attempt phai clone thanh exam moi `draft` neu can sua noi dung. Close exam chi chan attempt moi, khong auto-submit attempt dang lam.
+---
 
-## 7. Thao Tac Server-only Hoac Service Role
+## 7. Các Thao Tác Đặc Quyền Phía Máy Chủ (Server-Only / RPC)
 
-- Tao/cap nhat `profiles.role`.
-- Tao `started_at`, `deadline_at`.
-- Submit attempt va cham diem.
-- Doc `question_options.is_correct` de cham diem.
-- Resolve fullscreen violation va auto-submit.
-- Khoa Student va auto-submit attempt dang lam bang `account_locked`.
-- Publish validation, tinh `total_score`, revert published chua co attempt ve draft, va clone exam.
-- Xoa mem du lieu quan tri.
-- Tao signed URL upload neu can gioi han bucket.
+Các quy trình nghiệp vụ phức tạp được thực thi thông qua Stored Procedures (PL/pgSQL Security Definer) để đảm bảo tính toàn vẹn:
 
-## 8. Tan Cong Can Ngan Chan
+1. `publish_exam(exam_id uuid)`: Kiểm tra cấu trúc đề thi, tính tổng điểm và khóa nội dung đề thi.
+2. `delete_exam(p_exam_id uuid)`: Xóa mềm đề thi, phần thi, câu hỏi, đáp án và kết thúc các lượt thi đang diễn ra.
+3. `start_exam_attempt(...)`: Tạo lượt thi và tính hạn nộp bài (`deadline_at`) hoàn toàn bằng thời gian máy chủ.
+4. `save_attempt_answer(...)`: Lưu đáp án idempotent theo cơ chế upsert với khóa `(attempt_id, question_id)`.
+5. `submit_exam_attempt(...)`: Nộp bài, khóa lượt thi, so khớp đáp án đúng và tính điểm số với Row Lock (`SELECT FOR UPDATE`).
+6. `admin_lock_student(target_student_id uuid)`: Khóa học sinh và tự động nộp bài thi đang diễn ra.
+7. `admin_unlock_student(target_student_id uuid)`: Mở khóa tài khoản học sinh.
+8. `admin_reset_attempt(target_attempt_id uuid)`: Xóa bỏ lượt thi bị lỗi để học sinh làm lại.
 
-| Tinh huong | Bien phap |
-| --- | --- |
-| Student gui role `admin` tu client | Bo qua input role, doc role tu session server |
-| Guest doc du lieu private | RLS chi cho public/published |
-| Student doc attempt nguoi khac | Policy `student_id = auth.uid()` hoac guest token hash |
-| Student doc `is_correct` qua Network tab | View/RPC an truong, RLS khong select bang goc |
-| Student sua dap an sau nop | RPC kiem `exam_attempts.status = in_progress` |
-| Student nop hai lan | Submit transaction idempotent |
-| Admin thao tac khong qua server | RLS yeu cau role admin va log audit |
-| Guest doan `attemptId` cua Guest khac | So khop signed guest token hash; sai token tra 403/404 |
-| Client gui `student_id`, `deadline_at`, `score`, `status` khi start/submit | Server bo qua cac truong nay va tu tao/lock trong transaction |
-| Admin sua dap an dung/diem cua exam da co attempt | Server/RLS tu choi; yeu cau clone exam moi |
-| Student gui option cua cau hoi khac | `saveAnswer` kiem composite question-option va exam owner |
+---
 
-## 9. Acceptance Criteria
+## 8. Các Lỗ Hổng Bảo Mật Đã Được Phòng Chống
 
-- AC-RBAC-001: Student go truc tiep `/admin/exams` bi redirect va API tra 403.
-- AC-RBAC-002: Guest chi thay exam `published` va public.
-- AC-RBAC-003: Student khong select duoc attempt cua Student khac.
-- AC-RBAC-004: Response man hinh lam bai khong co `is_correct`.
-- AC-RBAC-005: Client update `profiles.role` bi tu choi.
-- AC-RBAC-006: Admin CRUD exam duoc log `created_by`/`updated_by`.
-- AC-RBAC-007: Khoa Student ngan attempt moi va autosave moi.
-- AC-RBAC-008: Guest co `attemptId` hop le nhung sai/mat signed guest token khong doc duoc payload.
-- AC-RBAC-009: Student active khong doc/bat dau duoc exam `private` trong MVP.
-- AC-RBAC-010: Tai khoan locked khong submit chu dong duoc attempt dang lam; server auto-submit voi `submit_reason = account_locked`.
-- AC-RBAC-011: Admin khong sua duoc dap an dung/diem/thu tu cua exam da co attempt.
-- AC-RBAC-012: Close exam khong doi status attempt dang lam va khong tao submit reason rieng trong MVP.
+| Lỗ hổng tiềm ẩn | Kỹ thuật tấn công | Giải pháp ngăn chặn triệt để |
+| --- | --- | --- |
+| **Lộ đáp án qua DevTools** | Kiểm tra Network tab tìm `is_correct` | Ẩn hoàn toàn trường `is_correct` trong câu lệnh SELECT của học sinh; chỉ giải mã khi đã nộp bài |
+| **Sửa điểm số phía client** | Gửi kèm `score` trong payload nộp bài | Máy chủ bỏ qua mọi tham số điểm gửi lên và tự động tính toán từ bảng `question_options` |
+| **Kéo dài thời gian thi** | Sửa đổi đồng hồ máy tính cá nhân | Thời gian bắt đầu và hạn nộp được lưu dưới dạng `timestamptz` trên PostgreSQL máy chủ |
+| **Nộp bài trùng lặp (Race Condition)** | Gửi nhiều request nộp bài cùng lúc | Áp dụng Transaction với Row Lock và Idempotency Key |
+| **Sửa đáp án sau khi nộp** | Gửi request `saveAnswer` sau khi đã nộp | Máy chủ kiểm tra `status = 'in_progress'` trước khi cho phép ghi đè đáp án |
+| **Can thiệp bài thi người khác** | Đoán ID bài thi (`attemptId`) | RLS kiểm tra chặt chẽ `student_id = auth.uid()` hoặc so khớp `guest_session_hash` |

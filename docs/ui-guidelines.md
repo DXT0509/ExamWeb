@@ -1,147 +1,144 @@
-# UI Guidelines
+# Hướng Dẫn Thiết Kế Giao Diện (UI/UX Guidelines)
 
-- Ngay cap nhat: 2026-08-01
-- Phien ban: 0.1
-- Trang thai: Draft
+- **Ngày cập nhật**: 2026-08-22
+- **Phiên bản**: 1.0
+- **Trạng thái**: Đã nghiệm thu & Hoạt động
 
-## Muc Luc
+---
 
-1. Nguyen tac tong the
-2. Typography, spacing, radius, shadow, mau sac
-3. Trang thai UI va accessibility
-4. Responsive va navigation
-5. Layout chinh
-6. Man hinh lam bai
-7. Admin dashboard
-8. State, form, toast, dialog
-9. Component dung lai
-10. Tieu chi kiem tra giao dien
+## Mục Lục
 
-## 1. Nguyen Tac Tong The
+1. [Nguyên tắc thiết kế tổng thể](#1-nguyên-tắc-thiết-kế-tổng-thể)
+2. [Hệ màu sắc, Kiểu chữ & Hiệu ứng (Design Tokens)](#2-hệ-màu-sắc-kiểu-chữ--hiệu-ứng-design-tokens)
+3. [Bố cục & Điều hướng đa nền tảng (Navigation & Layouts)](#3-bố-cục--điều-hướng-đa-nền-tảng-navigation--layouts)
+4. [Màn hình phòng thi trực quan (Exam Room UI)](#4-màn-hình-phòng-thi-trực-quan-exam-room-ui)
+5. [Trình soạn thảo đề thi Admin (Exam Builder UI)](#5-trình-soạn-thảo-đề-thi-admin-exam-builder-ui)
+6. [Bảng điều khiển & Quản trị dữ liệu (Admin Dashboard & Tables)](#6-bảng-điều-khiển--quản-trị-dữ-liệu-admin-dashboard--tables)
+7. [Các trạng thái giao diện & Khả năng tiếp cận (Accessibility)](#7-các-trạng-thái-giao-diện--khả-năng-tiếp-cận-accessibility)
+8. [Danh mục thành phần tái sử dụng (Component Catalog)](#8-danh-mục-thành-phần-tái-sử-dụng-component-catalog)
 
-- Giao dien uu tien doc nhanh, thao tac ro, khong sao chep website luyen thi nao.
-- Guest/Student can thay de thi, thoi gian, trang thai va hanh dong tiep theo trong mot man hinh.
-- Admin can giao dien gon, co loc, phan trang, khong nhieu bang/chi so chen chuc; dashboard toi da 3-4 block tom tat va moi list tai theo trang.
-- Khong dung cau chung chung nhu "than thien"; moi guideline phai co dau hieu kiem tra duoc.
+---
 
-## 2. Typography, Spacing, Radius, Shadow, Mau Sac
+## 1. Nguyên Tắc Thiết Kế Tổng Thể
 
-| Hang muc | Quy tac |
-| --- | --- |
-| Typography | Font sans mac dinh cua app; body 14-16px; heading theo cap ro rang; khong scale font bang viewport width |
-| Spacing | Dung scale 4/8px; section dashboard cach nhau 24px; form field cach nhau 12-16px |
-| Border radius | Card/input/button 6-8px, tru khi shadcn/ui token khac |
-| Shadow | Nhe, chi dung cho popover/dialog/sticky header; khong lap card trong card |
-| Mau sac | Nen trung tinh sang; mau primary dung cho hanh dong chinh; mau danger chi cho hanh dong pha huy |
-| Focus | Moi control co focus ring thay duoc bang keyboard |
-| Error | Mau danger + text loi gan field; khong chi dua vao mau |
+- **Tính tập trung & Rõ ràng**: Giao diện phòng thi loại bỏ hoàn toàn các yếu tố gây xao nhãng (không thanh menu, không liên kết ngoài), tối ưu hóa trải nghiệm đọc câu hỏi và chọn đáp án.
+- **Hiện đại & Cao cấp (Glassmorphism)**: Ứng dụng hiệu ứng kính mờ tinh tế (`backdrop-blur`), đường viền siêu mảnh (`border-border/50`), chuyển màu mượt mà (subtle gradients) và bóng đổ mềm mại.
+- **Nhất quán & Tiêu chuẩn hóa**: Sử dụng hệ thống biểu tượng **Lucide React**, các thành phần giao diện nền tảng **Shadcn UI** và **Tailwind CSS**.
+- **Căn chỉnh tự nhiên & Thân thiện**: Tất cả hộp thoại xác nhận, nội dung cảnh báo và form nhập liệu được căn trái (`text-left`) tự nhiên theo chuẩn trải nghiệm người dùng tiếng Việt.
 
-Brand color MVP: primary xanh lam trung tinh, accent xanh la nhe cho trang thai thanh cong, danger do.
+---
 
-## 3. Trang Thai UI Va Accessibility
+## 2. Hệ Màu Sắc, Kiểu Chữ & Hiệu Ứng (Design Tokens)
 
-- Hover: chi thay doi nen/vien nhe, khong lam layout nhay.
-- Focus: ro tren button, input, link, option.
-- Disabled: opacity giam, cursor disabled, co ly do neu hanh dong quan trong.
-- Error: hien thong diep cu the, vi du "Thoi gian lam bai phai tu 1 den 300 phut".
-- Accessibility: label cho input, aria cho dialog/toast, tab order logic, contrast toi thieu WCAG AA cho text chinh.
+### 2.1. Bảng màu chủ đạo (Color Palette)
 
-## 4. Responsive Va Navigation
+| Phân loại màu | Ứng dụng trong giao diện | Sắc thái màu sắc |
+| --- | --- | --- |
+| **Primary (Chủ đạo)** | Nút hành động chính, trạng thái active, thanh tiến độ | Xanh dương công nghệ (`indigo-600` / `blue-600`) |
+| **Success (Thành công)** | Câu trả lời đúng, trạng thái đã nộp, điểm số cao | Xanh lá tươi (`emerald-500` / `green-600`) |
+| **Warning (Cảnh báo)** | Đánh dấu xem lại (`marked`), sắp hết giờ thi, bản nháp | Vàng cam (`amber-500` / `orange-500`) |
+| **Danger (Nguy hiểm)** | Nút xóa, thoát toàn màn hình, câu trả lời sai, tài khoản bị khóa | Đỏ tươi (`rose-600` / `red-600`) |
+| **Neutral (Trung tính)** | Nền trang, thẻ card, chữ nội dung chính và phụ | Xám hiện đại (`slate-50` đến `slate-950`) |
 
-### Guest
+### 2.2. Kiểu chữ (Typography) & Khoảng cách (Spacing)
 
-- Header co logo/ten san pham, link De thi, Tai lieu, Dang nhap/Dang ky.
-- Mobile dung menu gon, khong che noi dung chinh.
+- **Phông chữ**: Font Sans chuẩn hệ thống kết hợp Google Fonts hiện đại (`Inter` / `Outfit`), hỗ trợ hiển thị tiếng Việt hoàn hảo, không bị lỗi dấu.
+- **Cấp bậc văn bản**:
+  - Tiêu đề chính trang (Page Heading): `text-2xl` đến `text-3xl font-bold tracking-tight`.
+  - Tiêu đề khối (Section / Card Heading): `text-lg font-semibold`.
+  - Nội dung câu hỏi: `text-base font-medium leading-relaxed`.
+  - Nội dung lựa chọn & văn bản thường: `text-sm leading-normal`.
+  - Chú thích & Metadata: `text-xs text-muted-foreground`.
+- **Bo góc (Border Radius)**: Chuẩn hóa `rounded-xl` (12px) cho Cards và Dialogs; `rounded-lg` (8px) cho Buttons và Inputs.
 
-### Student
+---
 
-- Navigation: Dashboard, De thi, Lich su, Ho so.
-- Trong man hinh lam bai: khong co menu hoac link de roi bai thi.
+## 3. Bố Cục & Điều Hướng Đa Nền Tảng (Navigation & Layouts)
 
-### Admin
+### 3.1. Header người dùng công khai (Public Header)
+- Logo ứng dụng nổi bật, thanh tìm kiếm nhanh, liên kết danh mục Đề thi, Tài liệu.
+- Nút chuyển đổi giao diện Sáng / Tối (Theme Switcher).
+- Nút Đăng nhập / Đăng ký hoặc Dropdown Menu thông tin người dùng kèm vai trò khi đã đăng nhập.
 
-- Sidebar hoac top navigation: Dashboard, Subjects, Categories, Exams, Attempts, Students, Documents.
-- Mobile Admin co the dung layout stacked; bang phai co scroll ngang co kiem soat.
+### 3.2. Sidebar Quản trị viên (Admin Sidebar)
+- Thanh điều hướng bên trái phân nhóm chức năng rõ ràng:
+  - **Tổng quan**: Bảng điều khiển (Dashboard).
+  - **Quản lý thi**: Đề thi (Exams), Lượt thi (Attempts), Môn học (Subjects), Danh mục (Categories).
+  - **Người dùng & Học liệu**: Học sinh (Students), Kho tài liệu (Documents).
+- Tự động thu gọn trên màn hình di động với Drawer / Sheet trượt mượt mà.
 
-## 5. Layout Chinh
+---
 
-| Trang | Quy tac layout |
-| --- | --- |
-| Trang chu | Gioi thieu ngan, de public noi bat, CTA xem de/dang ky; khong hero marketing qua dai |
-| Thu vien de | Filter ben tren, danh sach co pagination; moi item hien mon, danh muc, duration, trang thai guest |
-| Chi tiet de | Tieu de, mo ta, duration, so cau/diem, quyen truy cap, nut bat dau |
-| Student dashboard | De gan day, attempt dang lam, lich su gan nhat |
-| Ket qua | Diem, thoi gian nop, trang thai, cau dung/sai neu duoc phep, loi giai neu duoc phep |
-| Admin dashboard | Tong quan ngan, lien ket den module; khong tai toan bo ban ghi |
-| Trinh tao de | Form thong tin de, tabs/sections cho section/cau hoi, preview truoc publish |
+## 4. Màn Hình Phòng Thi Trực Quan (Exam Room UI)
 
-### Trang Quan Ly De Theo Trang Thai
+Giao diện phòng thi được chia thành 3 khu vực chức năng chính:
 
-- Exam `draft`: cho phep sua toan bo noi dung, section, question, option, dap an dung, diem, duration va cau hinh random. Hien nut `Xuat ban`; khi publish, hien validation summary chi ro section/question/option nao chua hop le.
-- Exam `published` chua co attempt: hien trang thai "Da xuat ban"; noi dung bi khoa mac dinh; co action `Dua ve ban nhap` kem confirmation de quay lai `draft` neu Admin can sua noi dung.
-- Exam da co attempt: noi dung bai thi read-only; khong hien nut sua dap an dung, diem, duration, random config hoac thu tu section/question/option. Hien thong bao "De da co bai lam nen noi dung khong the chinh sua." va nut `Nhan ban de chinh sua`.
-- Close exam phai mo ta ro la chi ngan luot thi moi; khong mo ta close exam la tu dong nop cac attempt dang lam.
-- Form exam co switch `Bat buoc che do toan man hinh`. Mo ta: "Hoc sinh su dung trinh duyet khong ho tro toan man hinh se khong the bat dau de nay."
+1. **Thanh tiêu đề cố định (Sticky Top Bar)**:
+   - Tên đề thi và mã lượt thi.
+   - **Đồng hồ đếm ngược (Countdown Timer)**: Đổi sang màu đỏ nhấp nháy khi thời gian làm bài còn dưới 5 phút.
+   - **Trạng thái lưu tự động (Autosave Indicator)**: Hiển thị icon đám mây với các trạng thái: `Đang lưu...`, `Đã lưu lúc 14:30:15`, `Lỗi kết nối - Đang thử lại`.
+   - Nút **"Nộp bài"** nổi bật.
+2. **Khu vực nội dung câu hỏi (Question Area)**:
+   - Tiêu đề phần thi và câu hỏi hiện tại.
+   - Nút đánh dấu **"Xem lại câu này"** (Mark for review) kèm icon cờ.
+   - Nội dung câu hỏi hỗ trợ văn bản đa dòng và ảnh minh họa (nếu có) hiển thị sắc nét.
+   - Danh sách 4 đáp án dạng nút bấm diện tích lớn, có hiệu ứng hover và đổi màu khi được chọn.
+   - Nút điều hướng **"Câu trước"** và **"Câu tiếp theo"**.
+3. **Thanh điều hướng câu hỏi (Question Navigator)**:
+   - Danh sách các ô số tương ứng với toàn bộ câu hỏi trong đề.
+   - Mã màu trực quan:
+     - ⚪ Xám nhạt: Chưa làm.
+     - 🔵 Xanh dương: Đã chọn đáp án.
+     - 🟡 Vàng cam: Đã đánh dấu xem lại.
+     - 🔷 Viền đậm: Câu hỏi đang hiển thị.
 
-## 6. Man Hinh Lam Bai
+---
 
-Man hinh thi phai co:
+## 5. Trình Soạn Thảo Đề Thi Admin (Exam Builder UI)
 
-- Header toi gian gom ten de, dong ho, trang thai luu, nut nop bai.
-- Dong ho ro rang tinh tu `deadline_at - server_now`; canh bao mau danger khi con it thoi gian.
-- Tien do: so cau da lam/tong so va so cau marked.
-- Noi dung cau hoi co anh neu co, khong bi che boi header/footer.
-- Lua chon dang radio/list item co vung click du lon.
-- Nut cau truoc/cau sau.
-- Danh sach so cau co trang thai: chua lam, da lam, danh dau, cau hien tai.
-- Nut nop bai can confirmation dialog.
-- Autosave: hien `Dang luu`, `Da luu luc HH:mm:ss`, `Luu that bai - thu lai`.
-- Overlay vi pham fullscreen phu toan man hinh, chan pointer/keyboard vao bai thi, co countdown 5 giay va nut quay lai fullscreen.
-- Neu exam bat buoc fullscreen nhung browser khong ho tro hoac request bi reject, hien thong bao truoc khi tao attempt va khong vao man hinh lam bai.
+- **Cấu trúc phân tầng trực quan**: Quản lý theo từng Phần thi (Section) -> Danh sách câu hỏi (Questions) -> Danh sách đáp án (Options).
+- **Hỗ trợ tải ảnh câu hỏi linh hoạt**:
+  - Tab 1: **Tải ảnh từ máy tính**: Kéo thả hoặc chọn file ảnh (PNG, JPG, WebP), tự động tải lên và hiển thị ảnh xem trước tức thì kèm hiệu ứng loading.
+  - Tab 2: **Nhập liên kết URL**: Nhập link ảnh trực tiếp từ internet.
+- **Biểu tượng cây bút chỉnh sửa**: Xuất hiện bên cạnh tiêu đề phần thi và câu hỏi để người dùng nhận biết vị trí có thể chỉnh sửa nội dung.
+- **Điều chỉnh vị trí**: Sử dụng các nút mũi tên Lên / Xuống để sắp xếp thứ tự câu hỏi và phần thi chính xác, không gây nhầm lẫn.
+- **Hộp thoại xác nhận xóa đề thi**:
+  - Nội dung căn trái chuẩn mực (`text-left`), thông báo rõ ràng về việc xóa đề thi và kết thúc an toàn các bài thi liên quan.
 
-Khong co menu, footer link, breadcrumb, hoac link tai lieu tren man hinh lam bai.
+---
 
-## 7. Admin Dashboard
+## 6. Bảng Điều Khiển & Quản Trị Dữ Liệu (Admin Dashboard & Tables)
 
-- Moi danh sach co filter ro: tu khoa, status, subject/category khi phu hop.
-- Bat buoc co pagination; khong tai toan bo ban ghi cung luc.
-- Bang hien cac cot thiet yeu truoc; chi tiet vao trang rieng.
-- Empty state noi ro "Chua co de thi" va co CTA tao moi neu Admin co quyen.
-- Error state co nut thu lai.
-- Hanh dong pha huy/xoa mem/dong de can confirmation dialog.
-- Khong nhoi qua nhieu bang va metric tren mot man hinh; toi da 3-4 block tom tat tren dashboard.
+- **Thẻ chỉ số (Stat Cards)**: Hiển thị 4 chỉ số trọng yếu: Tổng số đề thi, Tổng số học sinh, Tổng lượt thi, Điểm trung bình.
+- **Bảng dữ liệu chuẩn hóa (Data Tables)**:
+  - Hỗ trợ tìm kiếm theo từ khóa và bộ lọc trạng thái.
+  - Phân trang phía server (Server-side Pagination).
+  - Cột "Hành động" chứa các nút thao tác gọn gàng: Soạn đề, Xem chi tiết, Khóa tài khoản, Xóa đề thi (màu đỏ với icon thùng rác).
+  - Trạng thái trống (Empty State) hiển thị thông báo sinh động và nút tạo mới.
 
-## 8. Loading, Empty, Error, Success, Dialog, Toast, Form
+---
 
-| State | Quy tac |
-| --- | --- |
-| Loading | Skeleton cho danh sach/bang; spinner chi cho hanh dong ngan |
-| Empty | Mo ta nguyen nhan + hanh dong tiep theo neu co |
-| Error | Thong diep cu the + retry; log Sentry cho loi server |
-| Success | Toast ngan, tu dong dong; khong dung modal cho thanh cong nho |
-| Confirmation | Neu pha huy du lieu, mo ta tac dong va nut danger |
-| Validation | Validate client bang Zod/RHF va validate server lap lai |
+## 7. Các Trạng Thái Giao Diện & Khả Năng Tiếp Cận (Accessibility)
 
-## 9. Component Dung Lai
+- **Loading State**: Sử dụng hiệu ứng Skeleton Shimmer cho bảng danh sách và biểu đồ thay vì spinner đơn điệu.
+- **Empty State**: Trình bày rõ ràng lý do chưa có dữ liệu và kèm nút hành động tiếp theo (Call-to-Action).
+- **Error State**: Thông báo lỗi cụ thể bằng tiếng Việt có dấu, kèm nút "Thử lại".
+- **Toast Notifications**: Hiển thị thông báo thành công hoặc lỗi ở góc màn hình, tự động đóng sau 3 giây.
+- **Keyboard Navigation**: Hỗ trợ di chuyển giữa các nút bằng phím `Tab`, kích hoạt bằng phím `Enter` hoặc `Space`.
 
-- `ExamCard`
-- `ExamFilterBar`
-- `QuestionNavigator`
-- `AnswerOption`
-- `AutosaveStatus`
-- `CountdownTimer`
-- `FullscreenViolationOverlay`
-- `AdminDataTable`
-- `StatusBadge`
-- `ConfirmDialog`
-- `FormFieldError`
+---
 
-## 10. Tieu Chi Kiem Tra Giao Dien
+## 8. Danh Mục Thành Phần Tái Sử Dụng (Component Catalog)
 
-- AC-UI-001: Man hinh 375px khong co text/button tran khoi container.
-- AC-UI-002: Tat ca form field co label va error text.
-- AC-UI-003: Tab keyboard di qua control theo thu tu hop ly.
-- AC-UI-004: Man hinh thi khong co link roi bai.
-- AC-UI-005: Overlay fullscreen chan thao tac cau hoi.
-- AC-UI-006: Admin table co filter, pagination, empty state, error state.
-- AC-UI-007: Nut xoa/dong de can confirmation.
+| Tên Component | Vị trí mã nguồn | Mục đích sử dụng |
+| --- | --- | --- |
+| `ExamCard` | `src/components/exams/exam-card.tsx` | Thẻ hiển thị đề thi trên catalog |
+| `ExamFilterBar` | `src/components/exams/exam-filter-bar.tsx` | Thanh tìm kiếm và bộ lọc môn/danh mục |
+| `ExamTakingUI` | `src/components/exams/exam-taking-ui.tsx` | Giao diện phòng thi chính |
+| `QuestionNavigator`| `src/components/exams/question-navigator.tsx` | Bảng điều hướng câu hỏi |
+| `FullscreenGate` | `src/components/exams/fullscreen-gate.tsx` | Cổng kiểm tra và kích hoạt toàn màn hình |
+| `FullscreenViolationOverlay` | `src/components/exams/fullscreen-violation-overlay.tsx` | Màn hình khóa đếm ngược 5s khi vi phạm |
+| `ExamRowActions` | `src/components/admin/exam-row-actions.tsx` | Nút Soạn đề và Xóa đề trên bảng quản trị |
+| `BuilderQuestionCard` | `src/components/admin/exam-builder/builder-question-card.tsx` | Khối soạn thảo câu hỏi kèm tải ảnh |
+| `StatusBadge` | `src/components/shared/status-badge.tsx` | Huy hiệu trạng thái chuẩn hóa |
+| `ThemeToggle` | `src/components/theme/theme-toggle.tsx` | Nút chuyển đổi Dark / Light mode |

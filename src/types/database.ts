@@ -96,6 +96,69 @@ export type Database = {
           },
         ]
       }
+      documents: {
+        Row: {
+          created_at: string
+          created_by: string
+          deleted_at: string | null
+          description: string | null
+          external_url: string | null
+          file_path: string | null
+          id: string
+          is_public: boolean
+          slug: string
+          status: Database["public"]["Enums"]["document_status"]
+          title: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          deleted_at?: string | null
+          description?: string | null
+          external_url?: string | null
+          file_path?: string | null
+          id?: string
+          is_public?: boolean
+          slug: string
+          status?: Database["public"]["Enums"]["document_status"]
+          title: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          deleted_at?: string | null
+          description?: string | null
+          external_url?: string | null
+          file_path?: string | null
+          id?: string
+          is_public?: boolean
+          slug?: string
+          status?: Database["public"]["Enums"]["document_status"]
+          title?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "documents_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documents_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       exam_attempts: {
         Row: {
           blank_answers: number | null
@@ -677,6 +740,13 @@ export type Database = {
           success: boolean
         }[]
       }
+      delete_exam: {
+        Args: { p_exam_id: string }
+        Returns: {
+          code: string
+          success: boolean
+        }[]
+      }
       exam_for_section: {
         Args: { section_exam_id: string }
         Returns: {
@@ -712,6 +782,74 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      get_admin_attempt_detail: {
+        Args: { p_attempt_id: string }
+        Returns: Json
+      }
+      get_admin_attempts: {
+        Args: {
+          p_exam_id?: string
+          p_page?: number
+          p_page_size?: number
+          p_search?: string
+          p_status?: string
+          p_subject_id?: string
+          p_submit_reason?: string
+        }
+        Returns: {
+          attempt_id: string
+          exam_id: string
+          exam_title: string
+          is_guest: boolean
+          max_score: number
+          score: number
+          started_at: string
+          status: Database["public"]["Enums"]["attempt_status"]
+          student_email: string
+          student_id: string
+          student_name: string
+          subject_name: string
+          submit_reason: Database["public"]["Enums"]["submit_reason"]
+          submitted_at: string
+          total_count: number
+        }[]
+      }
+      get_admin_dashboard_events: {
+        Args: { p_limit?: number }
+        Returns: {
+          attempt_id: string
+          client_occurred_at: string
+          event_id: string
+          event_type: Database["public"]["Enums"]["exam_event_type"]
+          exam_id: string
+          exam_title: string
+          is_guest: boolean
+          metadata: Json
+          resolved_at: string
+          server_occurred_at: string
+          student_email: string
+          student_id: string
+          student_name: string
+          subject_name: string
+        }[]
+      }
+      get_admin_dashboard_stats: { Args: never; Returns: Json }
+      get_admin_students: {
+        Args: {
+          p_page?: number
+          p_page_size?: number
+          p_search?: string
+          p_status?: string
+        }
+        Returns: {
+          created_at: string
+          display_name: string
+          email: string
+          id: string
+          status: Database["public"]["Enums"]["profile_status"]
+          total_count: number
+        }[]
       }
       get_attempt_payload: {
         Args: { p_attempt_id: string; p_guest_session_hash?: string }
@@ -821,6 +959,15 @@ export type Database = {
           wrong_answers: number
         }[]
       }
+      toggle_student_lock: {
+        Args: { p_student_id: string; p_target_status: string }
+        Returns: {
+          attempts_auto_submitted: number
+          code: string
+          status: Database["public"]["Enums"]["profile_status"]
+          success: boolean
+        }[]
+      }
       verify_attempt_owner: {
         Args: {
           p_attempt: Database["public"]["Tables"]["exam_attempts"]["Row"]
@@ -831,6 +978,7 @@ export type Database = {
     }
     Enums: {
       attempt_status: "in_progress" | "submitted" | "auto_submitted" | "expired"
+      document_status: "draft" | "published" | "archived"
       exam_access_type: "public" | "students_only" | "private"
       exam_event_type:
         | "attempt_started"
@@ -986,6 +1134,7 @@ export const Constants = {
   public: {
     Enums: {
       attempt_status: ["in_progress", "submitted", "auto_submitted", "expired"],
+      document_status: ["draft", "published", "archived"],
       exam_access_type: ["public", "students_only", "private"],
       exam_event_type: [
         "attempt_started",

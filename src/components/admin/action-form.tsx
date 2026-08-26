@@ -13,6 +13,8 @@ export function ActionForm({
   submitLabel,
   pendingLabel = "Đang lưu...",
   className,
+  buttonVariant = "default",
+  buttonClassName,
   onSuccess,
   disabled = false,
 }: {
@@ -21,6 +23,8 @@ export function ActionForm({
   submitLabel: string;
   pendingLabel?: string;
   className?: string;
+  buttonVariant?: React.ComponentProps<typeof Button>["variant"];
+  buttonClassName?: string;
   onSuccess?: () => void;
   disabled?: boolean;
 }) {
@@ -39,15 +43,20 @@ export function ActionForm({
   return (
     <form action={formAction} className={className ?? "space-y-3"}>
       {children}
-      {state.message && <p className={state.ok ? "text-sm text-emerald-700" : "text-sm text-red-700"}>{state.message}</p>}
+      {state.message && <p className={state.ok ? "text-sm text-emerald-600 dark:text-emerald-400 font-medium" : "text-sm text-rose-600 dark:text-rose-400 font-medium"}>{state.message}</p>}
       {state.fieldErrors && Object.keys(state.fieldErrors).length > 0 && (
-        <ul className="list-disc space-y-1 pl-5 text-sm text-red-700">
+        <ul className="list-disc space-y-1 pl-5 text-sm text-rose-600 dark:text-rose-400">
           {Object.entries(state.fieldErrors).map(([field, message]) => (
             <li key={field}>{message}</li>
           ))}
         </ul>
       )}
-      <Button type="submit" disabled={disabled || isPending}>
+      <Button
+        type="submit"
+        variant={buttonVariant}
+        className={buttonClassName}
+        disabled={disabled || isPending}
+      >
         {isPending ? pendingLabel : submitLabel}
       </Button>
     </form>
@@ -58,31 +67,51 @@ export function ModalShell({
   title,
   trigger,
   children,
+  open: controlledOpen,
+  onOpenChange,
 }: {
   title: string;
-  trigger: React.ReactNode;
+  trigger?: React.ReactNode;
   children: React.ReactNode;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const isControlled = controlledOpen !== undefined;
+  const isOpen = isControlled ? controlledOpen : internalOpen;
+  const setOpen = (value: boolean) => {
+    if (!isControlled) setInternalOpen(value);
+    onOpenChange?.(value);
+  };
+
   return (
     <>
-      <span
-        role="button"
-        tabIndex={0}
-        onClick={() => setOpen(true)}
-        onKeyDown={(event) => {
-          if (event.key === "Enter" || event.key === " ") setOpen(true);
-        }}
-        className="contents"
-      >
-        {trigger}
-      </span>
-      {open && (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-black/35 p-4" role="dialog" aria-modal="true" aria-label={title}>
-          <div className="w-full max-w-xl rounded-md bg-white p-5 shadow-lg">
-            <div className="mb-4 flex items-center justify-between gap-3">
-              <h2 className="text-lg font-semibold">{title}</h2>
-              <Button type="button" variant="ghost" size="sm" onClick={() => setOpen(false)} aria-label="Đóng hộp thoại">
+      {trigger && (
+        <span
+          onClick={() => setOpen(true)}
+          className="contents"
+        >
+          {trigger}
+        </span>
+      )}
+      {isOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/60 backdrop-blur-xs p-4 animate-in fade-in"
+          role="dialog"
+          aria-modal="true"
+          aria-label={title}
+        >
+          <div className="relative my-auto w-full max-w-xl max-h-[85vh] overflow-y-auto rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-6 shadow-2xl text-[var(--foreground)] text-left">
+            <div className="mb-4 flex items-center justify-between gap-3 sticky top-0 bg-[var(--surface)] pb-3 z-10 border-b border-[var(--divider)]">
+              <h2 className="text-lg font-bold text-[var(--foreground)] text-left">{title}</h2>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setOpen(false)}
+                aria-label="Đóng hộp thoại"
+                className="text-[var(--muted-foreground)] hover:text-[var(--foreground)] rounded-xl"
+              >
                 Đóng
               </Button>
             </div>

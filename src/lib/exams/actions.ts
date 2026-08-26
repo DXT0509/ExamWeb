@@ -1,5 +1,7 @@
 "use server";
 
+import fs from "node:fs/promises";
+import path from "node:path";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { formBoolean, formIdList, formNullableString, formNumber, formString } from "@/lib/admin/form-data";
@@ -7,14 +9,26 @@ import { type ActionState, toFieldErrors } from "@/lib/admin/types";
 import { requireRole } from "@/lib/auth/require-user";
 import { getDatabaseErrorMessage, getRpcResultError } from "@/lib/exams/errors";
 import { createClient } from "@/lib/supabase/server";
-import { cloneExamSchema, examDraftSchema, optionSchema, postgresUuidSchema, questionSchema, reorderSchema, sectionSchema } from "@/lib/validations/exam";
+import {
+  cloneExamSchema,
+  examDraftSchema,
+  optionSchema,
+  postgresUuidSchema,
+  questionSchema,
+  reorderSchema,
+  sectionSchema,
+  validateQuestionImageFile,
+} from "@/lib/validations/exam";
+
+import { generateVietnameseSlug, resolveUniqueExamSlug } from "@/lib/utils/slug";
 
 function parseExamForm(formData: FormData) {
+  const rawSlug = formString(formData, "slug");
   return examDraftSchema.safeParse({
     subjectId: formString(formData, "subjectId"),
     categoryId: formNullableString(formData, "categoryId"),
     title: formString(formData, "title"),
-    slug: formString(formData, "slug").toLowerCase(),
+    slug: rawSlug ? rawSlug.toLowerCase() : undefined,
     description: formNullableString(formData, "description"),
     accessType: formString(formData, "accessType"),
     allowGuestAttempt: formBoolean(formData, "allowGuestAttempt"),
@@ -34,13 +48,18 @@ export async function createExamAction(_state: ActionState, formData: FormData):
   if (!parsed.success) return { ok: false, message: "Dữ liệu đề thi chưa hợp lệ.", fieldErrors: toFieldErrors(parsed.error) };
   const userId = user.id;
   const supabase = await createClient();
+
+  const slug = parsed.data.slug
+    ? await resolveUniqueExamSlug(supabase, parsed.data.slug)
+    : await resolveUniqueExamSlug(supabase, generateVietnameseSlug(parsed.data.title));
+
   const { data, error } = await supabase
     .from("exams")
     .insert({
       subject_id: parsed.data.subjectId,
       category_id: parsed.data.categoryId ?? null,
       title: parsed.data.title,
-      slug: parsed.data.slug,
+      slug,
       description: parsed.data.description ?? null,
       status: "draft",
       access_type: parsed.data.accessType,
@@ -58,6 +77,17 @@ export async function createExamAction(_state: ActionState, formData: FormData):
     .select("id")
     .single();
   if (error) return { ok: false, message: getDatabaseErrorMessage(error) };
+
+  // Tự động tạo Phần thi đầu tiên cho đề thi mới
+  await supabase
+    .from("exam_sections")
+    .insert({
+      exam_id: data.id,
+      title: "Phần 1: Trắc nghiệm",
+      description: "Các câu hỏi kiểm tra kiến thức.",
+      position: 1,
+    });
+
   redirect(`/admin/exams/${data.id}`);
 }
 
@@ -68,13 +98,23 @@ export async function updateExamAction(_state: ActionState, formData: FormData):
   const userId = user.id;
   const id = formString(formData, "id");
   const supabase = await createClient();
+
+  let slug = parsed.data.slug;
+  if (!slug) {
+    // Keep existing slug or resolve from title
+    const { data: existing } = await supabase.from("exams").select("slug").eq("id", id).maybeSingle();
+    slug = existing?.slug ?? (await resolveUniqueExamSlug(supabase, generateVietnameseSlug(parsed.data.title), id));
+  } else {
+    slug = await resolveUniqueExamSlug(supabase, slug, id);
+  }
+
   const { error } = await supabase
     .from("exams")
     .update({
       subject_id: parsed.data.subjectId,
       category_id: parsed.data.categoryId ?? null,
       title: parsed.data.title,
-      slug: parsed.data.slug,
+      slug,
       description: parsed.data.description ?? null,
       access_type: parsed.data.accessType,
       allow_guest_attempt: parsed.data.allowGuestAttempt,
@@ -100,13 +140,27 @@ export async function saveSectionAction(_state: ActionState, formData: FormData)
   const parsed = sectionSchema.safeParse({
     title: formString(formData, "title"),
     description: formNullableString(formData, "description"),
-    position: formNumber(formData, "position"),
+    position: formNumber(formData, "position") || 1,
   });
   if (!parsed.success) return { ok: false, message: "Dữ liệu phần thi chưa hợp lệ.", fieldErrors: toFieldErrors(parsed.error) };
   const supabase = await createClient();
   const id = formString(formData, "sectionId");
   const examId = formString(formData, "examId");
-  const payload = { title: parsed.data.title, description: parsed.data.description ?? null, position: parsed.data.position };
+
+  let positionToUse = parsed.data.position;
+  if (!id) {
+    const { data: maxSec } = await supabase
+      .from("exam_sections")
+      .select("position")
+      .eq("exam_id", examId)
+      .is("deleted_at", null)
+      .order("position", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    positionToUse = (maxSec?.position ?? 0) + 1;
+  }
+
+  const payload = { title: parsed.data.title, description: parsed.data.description ?? null, position: positionToUse };
   const result = id
     ? await supabase.from("exam_sections").update(payload).eq("id", id)
     : await supabase.from("exam_sections").insert({ ...payload, exam_id: examId });
@@ -117,12 +171,15 @@ export async function saveSectionAction(_state: ActionState, formData: FormData)
 
 export async function saveQuestionAction(_state: ActionState, formData: FormData): Promise<ActionState> {
   await requireRole("admin", "/admin/exams");
+  const rawContent = formString(formData, "content").trim();
+  const contentToSave = rawContent.length > 0 ? rawContent : "Nhập câu hỏi";
+
   const parsed = questionSchema.safeParse({
-    content: formString(formData, "content"),
+    content: contentToSave,
     imagePath: formNullableString(formData, "imagePath"),
     explanation: formNullableString(formData, "explanation"),
-    score: formNumber(formData, "score"),
-    position: formNumber(formData, "position"),
+    score: formNumber(formData, "score") || 1,
+    position: formNumber(formData, "position") || 1,
     isActive: formBoolean(formData, "isActive"),
   });
   if (!parsed.success) return { ok: false, message: "Dữ liệu câu hỏi chưa hợp lệ.", fieldErrors: toFieldErrors(parsed.error) };
@@ -130,18 +187,53 @@ export async function saveQuestionAction(_state: ActionState, formData: FormData
   const id = formString(formData, "questionId");
   const sectionId = formString(formData, "sectionId");
   const examId = formString(formData, "examId");
-  const payload = {
-    content: parsed.data.content,
-    image_path: parsed.data.imagePath ?? null,
-    explanation: parsed.data.explanation ?? null,
-    score: parsed.data.score,
-    position: parsed.data.position,
-    is_active: parsed.data.isActive ?? false,
-  };
-  const result = id
-    ? await supabase.from("questions").update(payload).eq("id", id)
-    : await supabase.from("questions").insert({ ...payload, section_id: sectionId });
-  if (result.error) return { ok: false, message: getDatabaseErrorMessage(result.error) };
+
+  if (id) {
+    const payload = {
+      content: parsed.data.content,
+      image_path: parsed.data.imagePath ?? null,
+      explanation: parsed.data.explanation ?? null,
+      score: parsed.data.score,
+      position: parsed.data.position,
+      is_active: parsed.data.isActive ?? false,
+    };
+    const result = await supabase.from("questions").update(payload).eq("id", id);
+    if (result.error) return { ok: false, message: getDatabaseErrorMessage(result.error) };
+  } else {
+    const { data: maxQ } = await supabase
+      .from("questions")
+      .select("position")
+      .eq("section_id", sectionId)
+      .is("deleted_at", null)
+      .order("position", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const nextPosition = (maxQ?.position ?? 0) + 1;
+
+    const payload = {
+      content: parsed.data.content,
+      image_path: parsed.data.imagePath ?? null,
+      explanation: parsed.data.explanation ?? null,
+      score: parsed.data.score,
+      position: nextPosition,
+      is_active: parsed.data.isActive ?? false,
+    };
+
+    const { data: newQ, error: qError } = await supabase
+      .from("questions")
+      .insert({ ...payload, section_id: sectionId })
+      .select("id")
+      .single();
+    if (qError) return { ok: false, message: getDatabaseErrorMessage(qError) };
+
+    // Tự động tạo 4 phương án mẫu A, B, C, D cho câu hỏi mới
+    await supabase.from("question_options").insert([
+      { question_id: newQ.id, content: "Phương án A", position: 1, is_correct: true, is_active: true },
+      { question_id: newQ.id, content: "Phương án B", position: 2, is_correct: false, is_active: true },
+      { question_id: newQ.id, content: "Phương án C", position: 3, is_correct: false, is_active: true },
+      { question_id: newQ.id, content: "Phương án D", position: 4, is_correct: false, is_active: true },
+    ]);
+  }
   revalidatePath(`/admin/exams/${examId}`);
   return { ok: true, message: id ? "Đã lưu câu hỏi." : "Đã tạo câu hỏi." };
 }
@@ -150,7 +242,7 @@ export async function saveOptionAction(_state: ActionState, formData: FormData):
   await requireRole("admin", "/admin/exams");
   const parsed = optionSchema.safeParse({
     content: formString(formData, "content"),
-    position: formNumber(formData, "position"),
+    position: formNumber(formData, "position") || 1,
     isCorrect: formBoolean(formData, "isCorrect"),
     isActive: formBoolean(formData, "isActive"),
   });
@@ -163,9 +255,23 @@ export async function saveOptionAction(_state: ActionState, formData: FormData):
     const clear = await supabase.from("question_options").update({ is_correct: false }).eq("question_id", questionId).is("deleted_at", null);
     if (clear.error) return { ok: false, message: getDatabaseErrorMessage(clear.error) };
   }
+
+  let positionToUse = parsed.data.position;
+  if (!id) {
+    const { data: maxOpt } = await supabase
+      .from("question_options")
+      .select("position")
+      .eq("question_id", questionId)
+      .is("deleted_at", null)
+      .order("position", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    positionToUse = (maxOpt?.position ?? 0) + 1;
+  }
+
   const payload = {
     content: parsed.data.content,
-    position: parsed.data.position,
+    position: positionToUse,
     is_correct: parsed.data.isCorrect,
     is_active: parsed.data.isActive ?? false,
   };
@@ -221,7 +327,32 @@ export async function softDeleteContentAction(_state: ActionState, formData: For
         : await supabase.from("question_options").update(payload).eq("id", id);
   if (result.error) return { ok: false, message: getDatabaseErrorMessage(result.error) };
   revalidatePath(`/admin/exams/${examId}`);
-  return { ok: true, message: "Đã xóa mềm nội dung." };
+  return { ok: true, message: "Đã xóa nội dung." };
+}
+
+export async function deleteExamAction(_state: ActionState, formData: FormData): Promise<ActionState> {
+  await requireRole("admin", "/admin/exams");
+  const id = formString(formData, "id");
+  if (!id) {
+    return { ok: false, message: "Mã đề thi không hợp lệ." };
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("delete_exam", { p_exam_id: id });
+
+  if (error) {
+    return { ok: false, message: getDatabaseErrorMessage(error) };
+  }
+
+  const result = data?.[0];
+  const message = getRpcResultError(result);
+  if (message) {
+    return { ok: false, message };
+  }
+
+  revalidatePath("/admin/exams");
+  revalidatePath("/exams");
+  return { ok: true, message: "Đã xóa đề thi thành công." };
 }
 
 export async function transitionExamAction(_state: ActionState, formData: FormData): Promise<ActionState> {
@@ -284,4 +415,39 @@ export async function reorderContentAction(_state: ActionState, formData: FormDa
   if (message) return { ok: false, message };
   revalidatePath(`/admin/exams/${examId}`);
   return { ok: true, message: "Đã cập nhật thứ tự." };
+}
+
+export async function uploadQuestionImageAction(
+  formData: FormData
+): Promise<{ ok: boolean; message: string; url?: string }> {
+  try {
+    await requireRole("admin", "/admin/exams");
+    const file = formData.get("file") as File | null;
+    const validation = validateQuestionImageFile(file);
+    if (!validation.ok) {
+      return { ok: false, message: validation.error };
+    }
+    const validFile = file as File;
+
+    const safeName = validFile.name
+      .replace(/[^a-zA-Z0-9.-]/g, "_")
+      .replace(/_{2,}/g, "_");
+    const filename = `${crypto.randomUUID()}-${safeName}`;
+
+    // Lưu vào thư mục public/uploads/questions/
+    const uploadDir = path.join(process.cwd(), "public", "uploads", "questions");
+    await fs.mkdir(uploadDir, { recursive: true });
+    const fullPath = path.join(uploadDir, filename);
+
+    const buffer = Buffer.from(await validFile.arrayBuffer());
+    await fs.writeFile(fullPath, buffer);
+
+    const publicUrl = `/uploads/questions/${filename}`;
+    return { ok: true, message: "Tải ảnh lên thành công.", url: publicUrl };
+  } catch (error) {
+    return {
+      ok: false,
+      message: error instanceof Error ? error.message : "Không thể tải hình ảnh lên.",
+    };
+  }
 }

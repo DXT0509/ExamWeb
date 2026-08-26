@@ -20,7 +20,9 @@ const messages: Record<string, string> = {
   RANDOMIZATION_NOT_SUPPORTED: "Chưa hỗ trợ đảo thứ tự câu hỏi hoặc lựa chọn trong MVP.",
   REORDER_INVALID_ITEMS: "Danh sách sắp xếp không khớp với dữ liệu hiện có.",
   SLUG_ALREADY_EXISTS: "Slug này đã được sử dụng.",
-  SUBJECT_INACTIVE: "Môn học không hoạt động hoặc đã bị xóa.",
+  DOCUMENT_NOT_FOUND: "Không tìm thấy tài liệu.",
+  DOCUMENT_SOURCE_REQUIRED: "Vui lòng cung cấp đường dẫn tệp hoặc liên kết tài liệu.",
+  INVALID_DOCUMENT_SOURCE: "Vui lòng chỉ chọn một nguồn tài liệu: đường dẫn tệp hoặc liên kết bên ngoài.",
   TOTAL_SCORE_SERVER_CONTROLLED: "Tổng điểm do hệ thống tính toán khi xuất bản đề.",
 };
 

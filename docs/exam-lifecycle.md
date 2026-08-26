@@ -1,182 +1,174 @@
-# Exam Lifecycle
+# Vòng Đời Bài Thi & Máy Trạng Thái (Exam Lifecycle)
 
-- Ngay cap nhat: 2026-08-01
-- Phien ban: 0.1
-- Trang thai: Draft
+- **Ngày cập nhật**: 2026-08-22
+- **Phiên bản**: 1.0
+- **Trạng thái**: Đã nghiệm thu & Hoạt động
 
-## Muc Luc
+---
 
-1. Tong quan vong doi
-2. Trang thai de thi va attempt
-3. State machine
-4. Quy tac bat dau/tiep tuc attempt
-5. Quy tac khoa noi dung exam sau publish
-6. Quy tac cau hoi, random va autosave
-7. Quy tac refresh, nhieu tab, mat mang
-8. Quy tac het gio, nop bai, cham diem
-9. Race condition va xu ly
-10. API/server action du kien
-11. Truong hop bat buoc
-12. Acceptance criteria
+## Mục Lục
 
-## 1. Tong Quan Vong Doi
+1. [Tổng quan vòng đời](#1-tổng-quan-vòng-đời)
+2. [Các trạng thái của Đề thi & Lượt thi](#2-các-trạng-thái-của-đề-thi--lượt-thi)
+3. [Sơ đồ máy trạng thái (State Machine Diagram)](#3-sơ-đồ-máy-trạng-thái-state-machine-diagram)
+4. [Quy trình khởi tạo & Tiếp tục bài thi](#4-quy-trình-khởi-tạo--tiếp-tục-bài-thi)
+5. [Quy tắc bảo vệ nội dung đề thi đã xuất bản](#5-quy-tắc-bảo-vệ-nội-dung-đề-thi-đã-xuất-bản)
+6. [Cơ chế lưu đáp án tự động (Idempotent Autosave)](#6-cơ-chế-lưu-đáp-án-tự-động-idempotent-autosave)
+7. [Xử lý mất kết nối, tải lại trang & đa tab](#7-xử-lý-mất-kết-nối-tải-lại-trang--đa-tab)
+8. [Quy trình nộp bài, hết giờ & Chấm điểm](#8-quy-trình-nộp-bài-hết-giờ--chấm-điểm)
+9. [Xử lý tranh chấp dữ liệu (Race Conditions)](#9-xử-lý-tranh-chấp-dữ-liệu-race-conditions)
+10. [Danh mục API & Server Actions cốt lõi](#10-danh-mục-api--server-actions-cốt-lõi)
 
-Vong doi bat dau khi Admin tao de `draft`, them section/cau hoi/option, cau hinh thoi gian va quyen truy cap, sau do `published`. Noi dung anh huong ket qua bi khoa sau publish; neu exam da co attempt thi muon sua noi dung phai clone thanh exam moi `draft`. Student hoac Guest duoc phep tao `exam_attempts`. Trong khi attempt `in_progress`, client tai cau hoi khong co dap an dung, autosave dap an bang upsert, va submit bang API idempotent. Sau submit, server cham diem, khoa dap an, va hien ket qua/loi giai theo cau hinh exam.
+---
 
-## 2. Trang Thai
+## 1. Tổng Quan Vòng Đời
 
-### De thi
+Vòng đời bài thi bao gồm hai chu kỳ song song và tương hỗ:
+1. **Chu kỳ đề thi (Exam Lifecycle)**: Bắt đầu từ khi Quản trị viên khởi tạo bản nháp (`draft`), phân chia phần thi, thêm câu hỏi, tải ảnh minh họa, sau đó xuất bản (`published`). Đề thi có thể chuyển sang đóng thi (`closed`), lưu trữ (`archived`), hoặc xóa bỏ với cơ chế xóa mềm liên đới (`delete_exam`).
+2. **Chu kỳ lượt thi (Attempt Lifecycle)**: Bắt đầu khi Thí sinh kích hoạt chế độ toàn màn hình và tạo lượt thi (`startAttempt`). Trong quá trình làm bài, các câu trả lời được lưu tức thời (Autosave). Lượt thi kết thúc khi thí sinh nộp bài chủ động (`submitted`), hết giờ thi (`auto_submitted` do `time_expired`), hoặc vi phạm quy định toàn màn hình (`auto_submitted` do `fullscreen_violation`). Máy chủ sẽ chốt điểm số và lưu trữ bất biến.
 
-| Trang thai | Mo ta |
+---
+
+## 2. Các Trạng Thái Của Đề Thi & Lượt Thi
+
+### 2.1. Trạng thái Đề thi (`exams.status`)
+
+| Trạng thái | Ý nghĩa & Hành vi |
 | --- | --- |
-| `draft` | Dang soan, chi Admin thay |
-| `published` | Co the duoc Guest/Student truy cap theo `access_type` |
-| `closed` | Khong cho attempt moi; attempt dang lam truoc do van tiep tuc den `deadline_at` |
-| `archived` | Luu lich su, khong sua noi dung chinh |
+| `draft` (Bản nháp) | Đang biên soạn, chỉ Quản trị viên nhìn thấy. Có thể tự do thêm/sửa/xóa phần thi, câu hỏi, đáp án |
+| `published` (Đã xuất bản) | Hiển thị trên thư viện đề thi theo `access_type`. Thí sinh có thể bắt đầu làm bài. Nội dung câu hỏi và điểm số được khóa |
+| `closed` (Đóng thi) | Ngăn chặn thí sinh bắt đầu lượt thi mới. Các thí sinh đang làm dở vẫn được tiếp tục làm bài cho đến hết giờ |
+| `archived` (Lưu trữ) | Lưu trữ lịch sử, không xuất hiện trên trang danh mục chính |
 
-### Attempt
+### 2.2. Trạng thái Lượt thi (`exam_attempts.status`)
 
-| Trang thai | Mo ta |
+| Trạng thái | Ý nghĩa & Hành vi |
 | --- | --- |
-| `in_progress` | Dang lam, co the autosave/submit |
-| `submitted` | Student nop chu dong |
-| `auto_submitted` | He thong nop do het gio, fullscreen violation, hoac account locked |
-| `expired` | Chi dung khi attempt khong the cham hop le hoac du lieu/phien khong the khoi phuc; het gio binh thuong dung `auto_submitted` + `time_expired` |
+| `in_progress` (Đang làm) | Bài thi đang diễn ra, đồng hồ đếm ngược hoạt động, cho phép lưu đáp án |
+| `submitted` (Đã nộp) | Thí sinh chủ động nộp bài thành công trước khi hết giờ |
+| `auto_submitted` (Tự động nộp) | Hệ thống tự động thu bài và chấm điểm do hết giờ, vi phạm toàn màn hình hoặc tài khoản bị khóa |
+| `expired` (Hết hạn) | Dùng cho các lượt thi bị đóng khi đề thi bị xóa hoặc không thể phục hồi |
 
-## 3. State Machine
+---
+
+## 3. Sơ Đồ Máy Trạng Thái (State Machine Diagram)
 
 ```mermaid
 stateDiagram-v2
-  state "Exam" as Exam {
-    [*] --> draft
-    draft --> published: admin_publish
-    published --> draft: revert_if_no_attempt
-    published --> closed: admin_close
-    closed --> archived: admin_archive
-    published --> archived: admin_archive
+  state "Đề thi (Exam)" as ExamState {
+    [*] --> Draft: Tạo đề mới
+    Draft --> Published: Xuất bản (publish_exam)
+    Published --> Draft: Chuyển về nháp (return_exam_to_draft)
+    Published --> Closed: Đóng đề (close_exam)
+    Closed --> Draft: Chuyển về nháp (return_exam_to_draft)
+    Closed --> Archived: Lưu trữ (archive_exam)
+    Published --> Archived: Lưu trữ (archive_exam)
+    Published --> [*]: Xóa đề (delete_exam)
+    Draft --> [*]: Xóa đề (delete_exam)
   }
 
-  state "Attempt" as Attempt {
-    [*] --> in_progress
-    in_progress --> in_progress: autosave_answer
-    in_progress --> submitted: student_submit
-    in_progress --> auto_submitted: time_expired
-    in_progress --> auto_submitted: fullscreen_violation
-    in_progress --> auto_submitted: account_locked
-    in_progress --> expired: unrecoverable_expiry
-    submitted --> [*]
-    auto_submitted --> [*]
-    expired --> [*]
+  state "Lượt thi (Attempt)" as AttemptState {
+    [*] --> InProgress: Bắt đầu làm bài (start_exam_attempt)
+    InProgress --> InProgress: Tự động lưu đáp án (save_attempt_answer)
+    InProgress --> Submitted: Thí sinh nộp bài (student_submit)
+    InProgress --> AutoSubmitted: Hết giờ làm bài (time_expired)
+    InProgress --> AutoSubmitted: Vi phạm toàn màn hình (fullscreen_violation)
+    InProgress --> AutoSubmitted: Tài khoản bị khóa (account_locked)
+    InProgress --> Expired: Đề thi bị xóa (delete_exam)
+    Submitted --> [*]: Chốt điểm bất biến
+    AutoSubmitted --> [*]: Chốt điểm bất biến
+    Expired --> [*]: Đóng bài
   }
 ```
 
-`closed` khong tao transition nao tu attempt `in_progress` sang `auto_submitted`; close exam chi chan attempt moi trong MVP.
+---
 
-## 4. Quy Tac Bat Dau/Tiep Tuc Attempt
+## 4. Quy Trình Khởi Tạo & Tiếp Tục Bài Thi
 
-- Dieu kien bat dau: exam `published`, user duoc phep theo `access_type`, Student `active`, Guest chi duoc neu `access_type = public` va `allow_guest_attempt = true`. `private` chi Admin preview trong MVP. Exam `closed` khong cho attempt moi.
-- Neu `fullscreen_required = true`, client kiem tra ho tro Fullscreen API va goi `requestFullscreen()` tu user gesture thanh cong truoc khi goi `startAttempt`. Kiem tra nay chi xac dinh kha nang UI, khong phai bien phap bao mat server-side.
-- Tao attempt bang server action/RPC sau khi dieu kien tren dat. Server dat `started_at = now()` va `deadline_at = started_at + duration_minutes`.
-- Client khong gui `started_at`, `deadline_at`, `score`, `status`.
-- Guest attempt: server tao signed guest token/cookie, luu hash vao `guest_session_hash`, va moi request sau phai so khop token nay.
-- Tiep tuc attempt: chi cho owner attempt, status `in_progress`, `now() < deadline_at`. Neu qua deadline, server submit/expire truoc khi tra du lieu.
-- Mot owner co the co nhieu attempt final cho cung mot exam trong MVP, nhung chi mot attempt `in_progress` moi exam. `startAttempt` chay trong transaction; neu hai request start dong thoi, unique partial index ngan attempt active thu hai va request thua doc/tra attempt active hien co.
+1. **Điều kiện bắt đầu**:
+   - Đề thi ở trạng thái `published` và chưa bị xóa mềm (`deleted_at IS NULL`).
+   - Quyền truy cập thỏa mãn: Khách đối với đề `public` có `allow_guest_attempt = true`; Học sinh với đề `public` hoặc `students_only`.
+   - Tài khoản học sinh ở trạng thái `active`.
+2. **Kích hoạt toàn màn hình**:
+   - Nếu `fullscreen_required = true`, giao diện hiển thị bảng hướng dẫn và yêu cầu thí sinh nhấn xác nhận để gọi `requestFullscreen()` từ thao tác người dùng (user gesture).
+3. **Tạo lượt thi**:
+   - Sau khi vào toàn màn hình thành công, gọi RPC `start_exam_attempt`.
+   - Máy chủ gán `started_at = now()` và `deadline_at = started_at + (duration_minutes * interval '1 minute')`.
+   - Nếu thí sinh đã có một bài thi `in_progress` chưa hoàn thành cho đề thi này, hệ thống sẽ trả về chính bài thi đó thay vì tạo bài mới.
 
-## 5. Quy Tac Khoa Noi Dung Exam Sau Publish
+---
 
-- Admin duoc sua toan bo noi dung khi exam `draft`.
-- Khi publish, server validate cau truc va tinh `total_score = sum(active questions.score)`; client khong duoc tu set `total_score`.
-- Sau khi exam `published`, cac du lieu anh huong ket qua bi khoa: `exam_sections`, `questions`, `question_options`, `question_options.is_correct`, `questions.score`, thu tu section/question/option, `duration_minutes`, `randomize_questions`, `randomize_options`.
-- Metadata co the sua sau publish trong MVP: `title`, `slug`, `description`, `access_type`, `allow_guest_attempt`, `fullscreen_required`, va cau hinh hien thi result/answer/solution.
-- Exam `published` chua co attempt co the dua ve `draft` de sua noi dung.
-- Exam da co it nhat mot attempt khong duoc dua ve `draft`; Admin phai clone exam thanh exam moi `draft` voi section/question/option ID moi. Exam cu giu nguyen de audit va attempt cu van cham theo noi dung cu.
+## 5. Quy Tắc Bảo Vệ Nội Dung Đề Thi Đã Xuất Bản
 
-## 6. Cau Hoi, Random Va Autosave
+- **Khi đề ở trạng thái `draft`**: Quản trị viên toàn quyền chỉnh sửa phần thi, câu hỏi, điểm số, ảnh minh họa, đáp án đúng và thời gian làm bài.
+- **Khi đề ở trạng thái `published`**:
+  - Database trigger `protect_exam_update` và `assert_exam_draft_for_content` sẽ chặn mọi thao tác cập nhật điểm số, thay đổi đáp án đúng hoặc sửa cấu trúc câu hỏi.
+  - Quản trị viên được phép sửa các thông tin hiển thị cơ bản (tiêu đề, mô tả, cấu hình hiển thị lời giải sau khi nộp).
+- **Trường hợp muốn sửa nội dung đề đã xuất bản**:
+  - Cách 1: Sử dụng chức năng **Nhân bản đề thi (Clone Exam)** để tạo một bản sao mới độc lập ở trạng thái `draft`.
+  - Cách 2: Sử dụng chức năng **Chuyển về bản nháp (Return to Draft)** nếu đề thi chưa có lượt thi thực tế nào.
 
-- Tai cau hoi qua API `getAttemptPayload(attemptId)` da kiem owner.
-- Response gom cau hoi, option, dap an da luu, trang thai danh dau, `server_now`, `deadline_at`.
-- Response khong gom `question_options.is_correct` va khong gom loi giai neu attempt chua nop.
-- Random cau hoi/option: trong MVP mac dinh false va Admin UI khong cho bat. Neu can bat sau MVP, phai them co che luu thu tu on dinh cho tung attempt truoc khi publish.
-- Autosave: client debounce khi thay doi, goi `upsertAttemptAnswer(attemptId, questionId, selectedOptionId, isMarked)`.
-- Server chi upsert neu attempt `in_progress`, owner hop le, Student chua bi khoa, attempt chua qua deadline, question thuoc section cua exam attempt, `selected_option_id` thuoc dung `question_id`, option active va chua soft delete. Neu bo chon dap an, `selected_option_id` co the null.
-- Request saveAnswer loi khong duoc tao hoac cap nhat `attempt_answers`.
-- Khong luu dong ho dem nguoc moi giay vao database.
+---
 
-## 7. Refresh, Nhieu Tab, Mat Mang
+## 6. Cơ Chế Lưu Đáp Án Tự Động (Idempotent Autosave)
 
-- Refresh: client goi lai payload; server tra dap an da luu va thoi gian con lai tinh tu `deadline_at - server_now`.
-- Nhieu tab: moi request autosave hop le duoc chap nhan theo last-write-wins cho cung `attempt_id + question_id`; UI nen hien canh bao neu phat hien tab khac qua `localStorage`/BroadcastChannel. Server van la nguon su that.
-- Mat mang khi autosave: client giu hang doi cuc bo ngan han va retry khi co mang. Neu attempt da qua deadline luc retry, server tu choi autosave va submit/expire.
-- Mat mang khi vi pham fullscreen sau khi event da ghi server: request tiep theo hoac scheduled sweeper xac minh event unresolved qua 5 giay va final; thoi diem final co the muon hon giay thu 5.
-- Mat mang truoc khi event toi server: server khong the biet chinh xac thoi diem thoat fullscreen. Client luu pending violation cuc bo va retry khi online; server dung `server_occurred_at` luc nhan event lam moc tin cay.
+- Khi thí sinh chọn đáp án, client áp dụng kỹ thuật debounce (300ms) và gọi RPC `save_attempt_answer`.
+- Đáp án được lưu vào bảng `attempt_answers` theo cơ chế `ON CONFLICT (attempt_id, question_id) DO UPDATE`.
+- Máy chủ xác thực nghiêm ngặt:
+  - Lượt thi phải thuộc về thí sinh và đang ở trạng thái `in_progress`.
+  - Thời gian hiện tại chưa vượt quá `deadline_at`.
+  - Câu hỏi và đáp án lựa chọn phải thuộc về đề thi của lượt thi này và đang hoạt động (`is_active = true`, `deleted_at IS NULL`).
 
-## 8. Het Gio, Nop Bai, Cham Diem
+---
 
-- Het gio: bat ky API attempt nao cung kiem `now() >= deadline_at`. Neu dung, server chuyen attempt thanh `auto_submitted` voi `submit_reason = time_expired`.
-- Nop bai: API submit nhan `attempt_id` va optional `idempotency_key`; transaction lock row attempt bang co che tuong duong `SELECT ... FOR UPDATE`. Neu attempt da final, khong cham lai, khong doi `submitted_at`/`finalized_at`/`score`, va tra ket qua final hien co ke ca request dung key khac.
-- Khi attempt `in_progress`, server xac minh owner, deadline, Student active, va submit reason. Cham diem, set status final, `submitted_at`, `finalized_at`, `score`, `max_score`, va ghi `idempotency_key` dau tien trong cung transaction.
-- Cham diem: server doc `is_correct`, tinh diem theo `questions.score` cua noi dung exam da khoa, luu `score`, `max_score`, `submitted_at`.
-- Sau khi attempt final, `attempt_answers` khong duoc insert/update/delete.
-- Hien ket qua: theo `show_score_after_submit`, `show_answers_after_submit`, `show_solutions_after_submit`.
+## 7. Xử Lý Mất Kết Nối, Tải Lại Trang & Đa Tab
 
-## 9. Race Condition Va Xu Ly
-
-| Race condition | Cach xu ly |
+| Tình huống | Cơ chế xử lý |
 | --- | --- |
-| Hai request submit dong thoi | Transaction + row lock + idempotency; request sau tra ket qua da final |
-| Autosave den sau submit | Server kiem status final va tu choi |
-| Client submit dung luc het gio | Server uu tien `now() >= deadline_at`; `submit_reason = time_expired` neu qua han |
-| Admin dong de khi Student dang lam | Khong tao attempt moi; attempt dang lam van tiep tuc autosave/submit den `deadline_at` |
-| Fullscreen timer client cham | Server so sanh `server_occurred_at` event chua resolve |
-| Refresh tao attempt moi | Start API tra attempt `in_progress` hien co cho cung owner + exam |
-| Nhieu tab ghi hai dap an | Unique + upsert last-write-wins, ghi `updated_at` |
-| Retry submit sau loi mang | Idempotency key tra ket qua cu |
-| Scheduled job het gio va submit tay cung luc | Ca hai dung cung transaction/row lock; request sau tra attempt final |
-| Tai khoan bi khoa khi dang lam | Server auto-submit attempt `in_progress` voi `submit_reason = account_locked`; chi cham answer da ack truoc luc khoa |
-| Hai request start dong thoi | Transaction + unique partial active attempt; request thua doc attempt active hien co |
-| Fullscreen exit va tab hidden gan nhau | Server chi giu mot unresolved violation active; event sau chi bo sung metadata/log, khong mo countdown moi |
+| **Tải lại trang (F5 / Refresh)** | Client tải lại toàn bộ câu hỏi và khôi phục 100% các câu trả lời đã lưu từ database; đồng hồ tiếp tục đếm ngược theo thời gian server |
+| **Mất kết nối mạng tạm thời** | Client lưu hàng đợi đáp án cục bộ và tự động gửi lại khi có mạng; nếu khi có mạng mà đã quá `deadline_at`, hệ thống sẽ tự động thu bài |
+| **Mở bài thi trên nhiều tab** | Cơ chế `upsert` trên máy chủ xử lý theo nguyên tắc thao tác sau cùng ghi đè (last-write-wins); giao diện đồng bộ trạng thái qua `BroadcastChannel` |
+| **Đột ngột tắt trình duyệt / Crash** | Bài thi vẫn duy trì trên máy chủ; thí sinh mở lại trình duyệt trong thời gian thi vẫn tiếp tục làm bài bình thường |
 
-## 10. API Hoac Server Action Du Kien
+---
 
-| API | Input | Output | Ghi chu |
+## 8. Quy Trình Nộp Bài, Hết Giờ & Chấm Điểm
+
+1. **Nộp bài chủ động**: Thí sinh nhấn "Nộp bài", hệ thống hiển thị hộp thoại xác nhận số câu đã làm và số câu chưa làm, sau đó gọi `submit_exam_attempt(submit_reason = 'student_submit')`.
+2. **Hết giờ làm bài**: Khi đồng hồ đếm ngược về 0 hoặc máy chủ phát hiện `now() >= deadline_at`, hệ thống tự động khóa bài với `submit_reason = 'time_expired'`.
+3. **Quy trình chấm điểm máy chủ (Server-side Scoring)**:
+   - Khóa bản ghi lượt thi bằng `SELECT ... FOR UPDATE` để chống nộp bài trùng lặp.
+   - So khớp các câu trả lời trong `attempt_answers` với đáp án đúng (`is_correct = true`) trong `question_options`.
+   - Tính toán tổng điểm đạt được (`score`), điểm tối đa (`max_score`), số câu đúng/sai/bỏ qua.
+   - Cập nhật trạng thái lượt thi thành `submitted` hoặc `auto_submitted` và ghi nhận `finalized_at = now()`.
+
+---
+
+## 9. Xử Lý Tranh Chấp Dữ Liệu (Race Conditions)
+
+```mermaid
+flowchart TD
+  Req1[Request Nộp bài A] --> Lock{Khóa bản ghi Attempt<br/>SELECT FOR UPDATE}
+  Req2[Request Nộp bài B] --> Lock
+  Lock --> CheckStatus{Trạng thái hiện tại?}
+  CheckStatus -- in_progress --> Score[Tính điểm & Ghi nhận Finalized]
+  CheckStatus -- Đã finalized --> ReturnExist[Trả về kết quả đã tính trước đó<br/>Không tính lại]
+  Score --> Finish[Trả về kết quả nộp bài thành công]
+```
+
+- **Hai request nộp bài cùng lúc**: Request đầu tiên chiếm khóa hàng và tính điểm; request thứ hai nhận kết quả đã chốt mà không tính điểm lần hai.
+- **Lưu đáp án đến sau khi đã nộp bài**: Máy chủ kiểm tra trạng thái khác `in_progress` và từ chối cập nhật.
+- **Quản trị viên xóa đề khi có người đang thi**: Hàm `delete_exam` tự động chuyển các bài đang làm sang `expired` và lưu trữ an toàn.
+
+---
+
+## 10. Danh Mục API & Server Actions Cốt Lõi
+
+| Tên Action / RPC | Tham số đầu vào | Kết quả trả về | Mục đích sử dụng |
 | --- | --- | --- | --- |
-| `startAttempt(examId)` | `examId`, optional guest token | `attemptId`, `startedAt`, `deadlineAt` | Server tao timestamp |
-| `getAttemptPayload(attemptId)` | `attemptId` | Cau hoi, option an dap an dung, answers, `serverNow` | Kiem owner |
-| `saveAnswer(attemptId, questionId, selectedOptionId, isMarked)` | Dap an | Answer da luu | Upsert |
-| `recordExamEvent(attemptId, eventType, clientOccurredAt, metadata)` | Event | Event id, server time | Fullscreen/visibility |
-| `resolveExamEvent(eventId)` | Event id | Resolved event | Khi quay lai fullscreen |
-| `submitAttempt(attemptId, idempotencyKey, reason)` | Reason hop le | Attempt final + result allowed | Idempotent |
-| `getAttemptResult(attemptId)` | `attemptId` | Ket qua theo config | Khong lo du lieu neu bi tat |
-| `cloneExam(examId)` | `examId` | Exam moi `draft` | Chi khi exam da co attempt va Admin can sua noi dung |
-
-## 11. Truong Hop Bat Buoc
-
-1. Student bat dau de fullscreen_required: client vao fullscreen thanh cong tu user gesture, sau do server tao attempt/deadline.
-2. Student refresh khi dang thi: payload phuc hoi dap an va thoi gian server-based.
-3. Student mo cung bai tren hai tab: server khong nhan doi attempt active; autosave last-write-wins; UI canh bao.
-4. Student mat mang khi luu dap an: retry; neu qua han thi autosave bi tu choi.
-5. Student bam nop hai lan: chi mot submit duoc cham, request sau tra final result.
-6. Het gio khi Student offline: request tiep theo hoac scheduled job chuyen `auto_submitted`.
-7. Client sua dong ho: vo hieu vi server dung `deadline_at`.
-8. Student goi API cua nguoi khac: RLS/API tra 403/404.
-9. Student quay lai attempt da nop: chi xem result, khong vao man hinh lam bai.
-10. Admin dong de luc Student dang lam: attempt dang lam van tiep tuc den deadline; close chi chan attempt moi.
-11. Browser crash: sau khi mo lai, payload phuc hoi theo `deadline_at`; neu qua han server final truoc khi tra result.
-12. Guest lam de: chi tiep tuc/xem result khi signed guest token khop `guest_session_hash`.
-13. Admin khoa Student dang thi: attempt auto-submit voi `submit_reason = account_locked`, chi cham answer da server ack.
-14. Admin sua noi dung exam da co attempt: bi tu choi; clone exam tao ban `draft` moi.
-
-## 12. Acceptance Criteria
-
-- AC-LIFE-001: Attempt moi co `started_at` va `deadline_at` do server tao.
-- AC-LIFE-002: Client khong thay `is_correct` truoc submit.
-- AC-LIFE-003: Refresh khong mat dap an da autosave.
-- AC-LIFE-004: Submit hai lan khong cham trung.
-- AC-LIFE-005: Qua deadline thi khong luu dap an moi.
-- AC-LIFE-006: Attempt final khong sua duoc answer.
-- AC-LIFE-007: Moi race condition trong bang co test tuong ung tai [acceptance-tests.md](./acceptance-tests.md).
-- AC-LIFE-008: Start attempt khong tao attempt active thu hai cho cung owner + exam.
-- AC-LIFE-009: Browser crash/refresh sau deadline tra attempt final, khong cho tiep tuc lam.
-- AC-LIFE-010: Exam da publish va co attempt khong sua duoc noi dung anh huong ket qua.
-- AC-LIFE-011: Close exam khong auto-submit attempt dang lam.
-- AC-LIFE-012: `saveAnswer` tu choi option/question khong thuoc exam attempt.
+| `startExamAttemptAction` | `examId`, `guestToken` | `attemptId`, `startedAt`, `deadlineAt` | Bắt đầu làm bài thi |
+| `saveAnswerAction` | `attemptId`, `questionId`, `optionId`, `isMarked` | `ok`, `message` | Lưu đáp án tự động |
+| `submitExamAttemptAction` | `attemptId`, `idempotencyKey`, `reason` | `ok`, `attemptId`, `score` | Nộp bài và chấm điểm |
+| `publishExamAction` | `examId` | `ok`, `publishedExamId` | Xuất bản đề thi |
+| `deleteExamAction` | `examId` | `ok`, `message` | Xóa đề thi liên đới an toàn |
+| `cloneExamAction` | `sourceExamId`, `newTitle`, `newSlug` | `ok`, `clonedExamId` | Nhân bản đề thi |

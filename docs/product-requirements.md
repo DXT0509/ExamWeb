@@ -1,204 +1,182 @@
-# Product Requirements
+# Tài Liệu Yêu Cầu Sản Phẩm (Product Requirements Document)
 
-- Ngay cap nhat: 2026-08-01
-- Phien ban: 0.1
-- Trang thai: Draft
+- **Ngày cập nhật**: 2026-08-22
+- **Phiên bản**: 1.0 (Hoàn thiện triển khai)
+- **Trạng thái**: Đã nghiệm thu & Hoạt động
 
-## Muc Luc
+---
 
-1. Tong quan san pham
-2. Van de can giai quyet
-3. Muc tieu
-4. Doi tuong su dung
-5. Pham vi MVP
-6. Ngoai MVP
-7. User journey
-8. Functional requirements
-9. Non-functional requirements
-10. Bao mat, hieu nang, kha dung, tuong thich
-11. Gia dinh, rang buoc, rui ro
-12. Tieu chi hoan thanh MVP
+## Mục Lục
 
-## 1. Tong quan san pham
+1. [Tổng quan sản phẩm](#1-tổng-quan-sản-phẩm)
+2. [Vấn đề cần giải quyết](#2-vấn-đề-cần-giải-quyết)
+3. [Mục tiêu sản phẩm](#3-mục-tiêu-sản-phẩm)
+4. [Đối tượng người dùng](#4-đối-tượng-người-dùng)
+5. [Phạm vi tính năng đã triển khai](#5-phạm-vi-tính-năng-đã-triển-khai)
+6. [Hành trình người dùng (User Journeys)](#6-hành-trình-người-dùng-user-journeys)
+7. [Yêu cầu chức năng chi tiết (Functional Requirements)](#7-yêu-cầu-chức-năng-chi-tiết-functional-requirements)
+8. [Yêu cầu phi chức năng (Non-Functional Requirements)](#8-yêu-cầu-phi-chức-năng-non-functional-requirements)
+9. [Bảo mật, hiệu năng và tính tương thích](#9-bảo-mật-hiệu-năng-và-tính-tương-thích)
+10. [Rủi ro và giải pháp khắc phục](#10-rủi-ro-và-giải-pháp-khắc-phục)
 
-Nen tang luyen thi truc tuyen cho khoang 100 nguoi dung dong thoi, gom Guest, Student va Admin. San pham cho phep cong bo de thi, lam bai co thoi gian, luu dap an tu dong, nop bai idempotent, xem ket qua theo cau hinh, va quan tri noi dung thi.
+---
 
-San pham khong sao chep thuong hieu, noi dung, du lieu hoac giao dien cua bat ky website nao. Tat ca cau hoi, tai lieu va du lieu seed phai la noi dung tu tao hoac duoc cap quyen hop le.
+## 1. Tổng Quan Sản Phẩm
 
-## 2. Van de can giai quyet
+**Exam Preparation App** là nền tảng luyện thi trực tuyến chuyên nghiệp phục vụ học sinh ôn luyện các kỳ thi quan trọng như Đánh giá năng lực (HSA, TSA), Tốt nghiệp THPT Quốc Gia và các kỳ thi chuẩn hóa. Hệ thống hỗ trợ hàng trăm người dùng đồng thời, đảm bảo tính bảo mật của đề thi, chống gian lận trong quá trình làm bài và cung cấp công cụ soạn thảo, quản trị toàn diện cho quản trị viên.
 
-- Hoc sinh can mot noi lam de on tap co thoi gian, lich su, ket qua va loi giai ro rang.
-- Quan tri vien can mot cong cu tao de co cau truc, xuat ban, theo doi ket qua va quan ly hoc sinh.
-- He thong can tranh lo dap an dung truoc khi nop bai, tranh sua bai sau khi nop, va chiu duoc 100 nguoi cung luu/nop bai gan dong thoi.
+Nền tảng được xây dựng với nguyên tắc bảo mật chặt chẽ: không để lộ đáp án trước khi nộp bài, thời gian làm bài đồng bộ theo máy chủ (`server-enforced time`), và phân quyền theo cấp độ dữ liệu (Row Level Security - RLS).
 
-## 3. Muc tieu
+---
 
-| Ma | Muc tieu | Do do |
+## 2. Vấn Đề Cần Giải Quyết
+
+- **Đối với học sinh**: Cần một môi trường luyện thi mô phỏng phòng thi thật với đồng hồ đếm ngược chính xác, lưu bài tự động không lo mất mạng, xem kết quả kèm đáp án và lời giải chi tiết để tiến bộ sau mỗi lần thi.
+- **Đối với quản trị viên**: Cần công cụ trực quan để tạo môn học, danh mục, phân chia phần thi, soạn câu hỏi hỗ trợ ảnh (tải từ máy tính hoặc qua link), xuất bản/đóng đề và theo dõi kết quả, quản lý trạng thái tài khoản học sinh.
+- **Về mặt kỹ thuật**: Cần ngăn chặn việc xem trước đáp án qua Network tab/DevTools, chống chỉnh sửa điểm số phía client, đảm bảo tính bất biến (idempotency) khi nộp bài và chịu tải tốt khi nhiều thí sinh nộp bài cùng lúc.
+
+---
+
+## 3. Mục Tiêu Sản Phẩm
+
+| Mã | Mục tiêu | Thước đo thành công |
 | --- | --- | --- |
-| GOAL-001 | Guest xem va tim de cong khai | Tim keyword/subject/category filter tra ket qua trong 2 giay voi du lieu MVP |
-| GOAL-002 | Student lam bai on dinh | Dap an duoc autosave va phuc hoi sau refresh |
-| GOAL-003 | Admin quan ly noi dung thi | Admin tao, sua, xuat ban de co cau hoi va section |
-| GOAL-004 | Bao ve du lieu bai thi | Client khong nhan dap an dung truoc khi attempt duoc nop |
-| GOAL-005 | Chiu tai MVP | 100 VU bat dau, luu dap an, nop bai gan dong thoi dat nguong load test |
+| **GOAL-001** | Tìm kiếm & lọc đề thi mượt mà | Tìm kiếm từ khóa, môn học, danh mục trả kết quả dưới 2 giây |
+| **GOAL-002** | Trải nghiệm phòng thi ổn định | Lưu đáp án tự động (autosave), phục hồi 100% tiến độ khi tải lại trang |
+| **GOAL-003** | Giám sát & chống gian lận | Cảnh báo toàn màn hình (Fullscreen Guard), đếm ngược 5s khi thoát màn hình hoặc chuyển tab |
+| **GOAL-004** | Bảo mật đề thi & chống lộ đáp án | Không trả trường `is_correct` xuống client trước khi bài thi được nộp |
+| **GOAL-005** | Quản trị nội dung & học sinh | Tạo, biên tập, xuất bản, xóa mềm đề thi liên đới, khóa/mở khóa học sinh |
+| **GOAL-006** | Hiệu năng chịu tải cao | Hỗ trợ 100 người dùng đồng thời (VU) với thời gian phản hồi p95 < 800ms, tỷ lệ lỗi 5xx < 1% |
 
-## 4. Doi Tuong Su Dung
+---
 
-| Nhom | Mo ta | Nhu cau chinh |
+## 4. Đối Tượng Người Dùng
+
+| Nhóm | Mô tả | Quyền hạn & Nhu cầu chính |
 | --- | --- | --- |
-| Guest | Nguoi chua dang nhap | Xem trang chu, tim de cong khai, lam de mien phi neu duoc phep |
-| Student | Hoc sinh co tai khoan | Lam bai, xem ket qua/lich su/loi giai theo cau hinh, quan ly ho so |
-| Admin | Quan tri vien | Quan ly mon hoc, danh muc, de, cau hoi, hoc sinh, tai lieu va thong ke |
+| **Guest (Khách)** | Người dùng chưa đăng nhập | Xem trang chủ, tra cứu thư viện đề công khai, làm thử các đề cho phép thi thử |
+| **Student (Học sinh)** | Thí sinh đã đăng ký và kích hoạt | Làm bài thi, lưu đáp án, nộp bài, xem điểm số, lịch sử thi và kho tài liệu ôn tập |
+| **Admin (Quản trị viên)** | Người quản lý hệ thống | Quản lý môn học, danh mục, soạn đề, tải ảnh câu hỏi, xuất bản/xóa đề, quản lý học sinh và tài liệu |
 
-## 5. Pham Vi MVP
+---
 
-- Auth bang Supabase Authentication: dang ky, dang nhap, dang xuat.
-- Route guard cho Guest, Student, Admin.
-- Quan ly `subjects`, `exam_categories`, `exams`, `exam_sections`, `questions`, `question_options`.
-- Upload anh cau hoi qua Supabase Storage.
-- Xuat ban/dong de thi.
-- Thu vien de cong khai co tim kiem va loc co ban.
-- Tao attempt cho Student va Guest neu de cho phep.
-- Man hinh lam bai theo cau hinh `fullscreen_required`, chon/danh dau cau hoi, autosave, dong ho server-based.
-- Nop bai chu dong, nop bai khi het gio, nop bai do vi pham fullscreen.
-- Cham diem cau hoi trac nghiem mot dap an dung trong MVP.
-- Ket qua, lich su va loi giai theo cau hinh Admin.
-- Tai lieu cong khai.
-- Acceptance/load test cho 100 nguoi dong thoi.
+## 5. Phạm Vi Tính Năng Đã Triển Khai
 
-## 6. Cac Chuc Nang Ngoai MVP
+1. **Xác thực & Phân quyền (Authentication & RBAC)**:
+   - Đăng ký, đăng nhập bằng email/mật khẩu qua Supabase Auth.
+   - Phân quyền theo vai trò `student` và `admin`, kiểm soát trạng thái `active` và `locked`.
+   - Route guard cấp máy chủ và trang thông báo tài khoản bị khóa `/account-locked`.
+2. **Khám phá đề thi (Catalog & Search)**:
+   - Thư viện đề thi có thanh lọc đa tiêu chí (môn học, danh mục, từ khóa), phân trang phía server.
+   - View bảo mật `public_exam_catalog` ẩn toàn bộ thông tin câu hỏi và đáp án trước khi thi.
+3. **Phòng thi & Chống gian lận (Exam Engine & Integrity)**:
+   - Kiểm tra hỗ trợ Fullscreen API trước khi tạo lượt thi.
+   - Đồng hồ đếm ngược máy chủ, tự động lưu đáp án theo cơ chế upsert idempotent.
+   - Cảnh báo thoát toàn màn hình / ẩn tab với thời gian ân hạn 5 giây; tự động nộp bài nếu vi phạm quá hạn.
+   - Nộp bài tự động khi hết giờ thi (`submit_reason = time_expired`).
+4. **Chấm điểm & Lịch sử học tập (Scoring & History)**:
+   - Chấm điểm trắc nghiệm tức thì phía máy chủ ngay sau khi nộp bài.
+   - Hiển thị bảng tổng kết số câu đúng/sai/bỏ qua, xem lời giải chi tiết theo cấu hình của đề.
+   - Trang lịch sử thi cá nhân `/student/history` lưu trữ chi tiết từng lượt thi.
+5. **Soạn thảo & Quản trị đề thi (Exam Builder & Admin)**:
+   - Tạo đề thi với phân chia phần thi (sections), thứ tự câu hỏi tăng dần.
+   - Chức năng thêm hình ảnh minh họa cho câu hỏi (chọn tải từ máy tính hoặc nhập liên kết URL).
+   - Điều hướng vị trí câu hỏi/phần thi lên/xuống.
+   - Quản lý vòng đời đề thi: `draft` -> `published` -> `closed` -> `archived`.
+   - **Xóa đề thi an toàn**: Cho phép xóa đề thi (kể cả đã xuất bản) kèm xóa mềm toàn bộ phần thi, câu hỏi, đáp án và tự động đóng các lượt thi đang làm dở.
+6. **Quản lý học sinh & Lượt thi (Student & Attempts Admin)**:
+   - Xem danh sách học sinh, thao tác khóa/mở khóa tài khoản (tự động nộp bài thi đang làm dở khi khóa).
+   - Tra cứu và xem chi tiết toàn bộ lượt thi của tất cả học sinh, hỗ trợ reset lượt thi.
+7. **Quản trị tài liệu ôn tập (Document Management)**:
+   - Tải lên tài liệu PDF hoặc nhập liên kết tài liệu số bên ngoài.
+   - Phân quyền xem tài liệu theo trạng thái công khai hoặc dành riêng cho học sinh.
+8. **Bảng điều khiển quản trị (Admin Dashboard)**:
+   - Thống kê chỉ số: tổng đề thi, tổng học sinh, tổng lượt thi, điểm trung bình.
+   - Biểu đồ phân bổ điểm số và danh sách hoạt động thi gần nhất.
 
-| Hang muc | Ly do dua ra sau |
-| --- | --- |
-| Import cau hoi tu Excel | Can chuan hoa template, validate va rollback rieng |
-| Thanh toan, goi VIP | Khong thuoc muc tieu MVP |
-| Webcam/proctoring nang cao | Rui ro rieng tu va ky thuat cao |
-| AI cham bai | MVP chi cham trac nghiem |
-| Dien dan, bang xep hang | Tang pham vi xa nhu cau cot loi |
-| Cau hoi tu luan, multiple-correct | Can rubric va scoring phuc tap hon |
-| Dung attempt dang lam ngay khi Admin close exam | MVP close exam chi chan attempt moi |
-| `exam_versions`/snapshot phuc tap | MVP khoa noi dung sau publish va clone exam khi can sua |
+---
 
-## 7. User Journey
+## 6. Hành Trình Người Dùng (User Journeys)
 
-### Guest
+### Hành trình Học sinh (Student Journey)
+```mermaid
+sequenceDiagram
+  autonumber
+  actor Student as Học sinh
+  participant UI as Giao diện Web
+  participant Server as Máy chủ Next.js
+  participant DB as Supabase DB
 
-1. Mo trang chu.
-2. Xem thu vien de cong khai.
-3. Tim kiem/loc theo mon, danh muc, tu khoa.
-4. Xem chi tiet co ban cua de.
-5. Neu `allow_guest_attempt = true`, Guest co the bat dau lam bai bang phien tam.
-6. Sau khi nop, Guest xem ket qua neu de cho phep; lich su khong duoc luu dai han ngoai phien.
+  Student->>UI: Đăng nhập vào hệ thống
+  UI->>Server: Xác thực tài khoản & lấy quyền
+  Server-->>UI: Chuyển hướng đến /student
+  Student->>UI: Chọn đề thi và nhấn "Bắt đầu làm bài"
+  UI->>UI: Yêu cầu vào chế độ Toàn màn hình (Fullscreen)
+  UI->>Server: Khởi tạo lượt thi (startAttempt)
+  Server->>DB: Tạo exam_attempts với deadline_at từ server
+  Server-->>UI: Trả về nội dung đề thi (ẩn đáp án đúng)
+  loop Trong quá trình làm bài
+    Student->>UI: Chọn đáp án / Đánh dấu câu hỏi
+    UI->>Server: Tự động lưu đáp án (saveAnswer)
+  end
+  alt Nộp bài chủ động
+    Student->>UI: Nhấn "Nộp bài" và xác nhận
+    UI->>Server: Gửi yêu cầu nộp bài (submitAttempt)
+  else Hết giờ hoặc Vi phạm Fullscreen
+    Server->>DB: Tự động khóa bài và chấm điểm
+  end
+  Server->>DB: Chấm điểm dựa trên đáp án đúng đã khóa
+  Server-->>UI: Trả về kết quả, điểm số và lời giải chi tiết
+  Student->>UI: Xem kết quả và lịch sử thi tại /student/history
+```
 
-### Student
+---
 
-1. Dang ky hoac dang nhap.
-2. Xem dashboard va danh sach de duoc phep.
-3. Mo chi tiet de, bam bat dau.
-4. Xac nhan huong dan fullscreen.
-5. Lam bai, autosave dap an, danh dau cau hoi.
-6. Nop bai hoac bi auto-submit khi het gio/qua han vi pham fullscreen.
-7. Xem ket qua, lich su, loi giai theo cau hinh.
+## 7. Yêu Cầu Chức Năng Chi Tiết (Functional Requirements)
 
-### Admin
+| Mã yêu cầu | Tên chức năng | Mô tả chi tiết | Mức độ | Tiêu chí nghiệm thu |
+| --- | --- | --- | --- | --- |
+| **FR-AUTH-001** | Đăng ký & Đăng nhập | Cho phép học sinh tạo tài khoản và đăng nhập qua email | Bắt buộc | Tài khoản được tạo với role `student` và status `active` |
+| **FR-AUTH-002** | Khóa tài khoản | Admin có quyền khóa tài khoản học sinh | Bắt buộc | Học sinh bị khóa không thể bắt đầu bài mới; bài đang làm bị tự động nộp |
+| **FR-EXAM-001** | Tạo & Soạn đề thi | Admin tạo đề thi, chia phần thi và tạo câu hỏi | Bắt buộc | Vị trí câu hỏi không bị trùng lặp; tự động tính tổng điểm khi xuất bản |
+| **FR-EXAM-002** | Tải ảnh câu hỏi | Tải ảnh trực tiếp từ máy tính hoặc liên kết URL | Bắt buộc | Ảnh được lưu trữ chuẩn xác và hiển thị mượt mà trong đề thi |
+| **FR-EXAM-003** | Xóa đề thi toàn diện | Cho phép xóa đề thi ở mọi trạng thái | Bắt buộc | Xóa mềm đề thi, sections, questions, options và đóng các lượt thi đang làm |
+| **FR-EXAM-004** | Vòng đời đề thi | Chuyển trạng thái Draft -> Published -> Closed -> Archived | Bắt buộc | Nội dung câu hỏi được bảo vệ chống sửa đổi sau khi đã có lượt thi |
+| **FR-EXAM-005** | Nhân bản đề thi | Cho phép nhân bản đề thi đã có lượt thi để chỉnh sửa | Bắt buộc | Tạo bản sao độc lập ở trạng thái Draft với ID câu hỏi mới |
+| **FR-FULL-001** | Chống gian lận Fullscreen | Giám sát toàn màn hình và trạng thái ẩn tab | Bắt buộc | Đếm ngược 5 giây khi rời màn hình; tự động nộp bài nếu vi phạm quá hạn |
+| **FR-ATTEMPT-001** | Đồng hồ đếm ngược | Thời gian thi tính toán hoàn toàn theo server | Bắt buộc | Thay đổi giờ máy tính client không ảnh hưởng đến thời hạn nộp bài |
+| **FR-ATTEMPT-002** | Lưu đáp án Idempotent | Lưu đáp án tức thời theo cặp `(attempt_id, question_id)` | Bắt buộc | Không tạo bản ghi trùng lặp; khôi phục đầy đủ đáp án khi tải lại trang |
+| **FR-SCORE-001** | Chấm điểm tự động | Tự động so khớp với đáp án đúng và tính điểm số | Bắt buộc | Điểm số và thời gian chốt bất biến sau khi bài thi hoàn thành |
+| **FR-DOC-001** | Quản lý tài liệu | Admin đăng tài liệu ôn tập và học sinh xem/tải | Bổ sung | Phân quyền truy cập chính xác theo trạng thái công khai |
 
-1. Dang nhap bang tai khoan Admin.
-2. Quan ly mon hoc va danh muc.
-3. Tao de, section, cau hoi, option, dap an dung, loi giai.
-4. Cau hinh thoi gian, diem, quyen truy cap, hien thi dap an/loi giai.
-5. Xuat ban de.
-6. Xem bai lam, ket qua, thong ke.
-7. Khoa/mo tai khoan Student va quan ly tai lieu cong khai.
+---
 
-## 8. Functional Requirements
+## 8. Yêu Cầu Phi Chức Năng (Non-Functional Requirements)
 
-| Ma | Ten | Mo ta | Uu tien | Dieu kien truoc | Ket qua mong doi | Tieu chi kiem thu |
-| --- | --- | --- | --- | --- | --- | --- |
-| FR-AUTH-001 | Dang ky Student | Student tao tai khoan bang email/password qua Supabase Auth | Must | Email chua ton tai | Tao `auth.users` va `profiles.role = student` | Given email hop le, When dang ky, Then user dang nhap va profile la student |
-| FR-AUTH-002 | Dang nhap/dang xuat | Student/Admin dang nhap va dang xuat | Must | Tai khoan active | Session duoc tao/xoa | Route can auth chi truy cap sau dang nhap |
-| FR-AUTH-003 | Khoa tai khoan | Admin khoa/mo Student | Must | Admin hop le | Student bi khoa khong bat dau attempt moi | Student bi khoa bi redirect den trang thong bao |
-| FR-RBAC-001 | Route guard | Bao ve route theo role | Must | Role doc tu server | Guest/Student/Admin vao dung khu vuc | Thu cong go URL admin bang Student bi tu choi |
-| FR-CATALOG-001 | Xem de cong khai | Guest xem de published/public | Must | De da xuat ban | Danh sach de hien thi khong lo du lieu rieng | Guest khong thay de private/draft |
-| FR-CATALOG-002 | Tim kiem va loc | Loc theo tu khoa, mon, danh muc | Must | Co de cong khai | Ket qua dung dieu kien | Filter tra khong qua 2 giay voi du lieu seed MVP |
-| FR-ADMIN-001 | Quan ly mon hoc | Admin tao/sua/xoa mem subjects | Must | Admin hop le | Subject duoc cap nhat | Student khong goi duoc API ghi |
-| FR-ADMIN-002 | Quan ly danh muc | Admin tao/sua/xoa mem exam_categories | Must | Admin hop le | Category duoc cap nhat | Category gan exam dang published khong xoa cung |
-| FR-EXAM-001 | Tao de | Admin tao exam o trang thai draft | Must | Co subject/category | Exam draft duoc tao | Truong bat buoc duoc validate |
-| FR-EXAM-002 | Tao section | Admin tao va sap xep section | Must | Exam draft | Section co `position` duy nhat trong exam | Reorder luu dung thu tu |
-| FR-QUESTION-001 | Tao cau hoi | Admin tao cau hoi, diem, anh, loi giai | Must | Exam draft | Question duoc luu | Cau hoi thieu noi dung bi tu choi |
-| FR-QUESTION-002 | Tao option va dap an dung | Admin tao option va danh dau dap an dung | Must | Question ton tai | Co it nhat 2 option va 1 option dung | Published exam khong duoc thieu dap an dung |
-| FR-EXAM-003 | Cau hinh de | Admin cau hinh duration, access, show result/solution | Must | Exam draft | Config duoc luu | Gia tri am hoac qua gioi han bi tu choi |
-| FR-EXAM-004 | Xuat ban/dong de | Admin chuyen draft sang published hoac closed | Must | De hop le | Guest/Student thay theo access | De thieu cau hoi khong publish duoc |
-| FR-EXAM-005 | Khoa noi dung sau publish | Noi dung anh huong ket qua bi khoa sau `published`; exam da co attempt phai clone de sua | Must | Exam published | Attempt cu cham theo noi dung cu | Sua `is_correct`/score/thu tu cua exam da co attempt bi tu choi |
-| FR-EXAM-006 | Validate publish va tinh tong diem | Server validate cau truc va tinh `total_score` | Must | Exam draft | `total_score = SUM(active questions.score)` | Client gui `total_score` gia bi bo qua |
-| FR-EXAM-007 | Clone exam | Admin clone exam da co attempt thanh exam moi `draft` | Must | Admin hop le, exam ton tai | Section/question/option duoc copy sang ID moi | Attempt cu van tro den exam cu |
-| FR-ATTEMPT-001 | Bat dau attempt | Student/Guest duoc phep tao attempt | Must | Exam published, user duoc phep | `started_at` va `deadline_at` tao tu server | Client sua duration khong anh huong deadline |
-| FR-ATTEMPT-002 | Tiep tuc attempt | Student quay lai attempt `in_progress` | Must | Attempt chua het han | Tai cau hoi va dap an da luu | Refresh trang phuc hoi tien do |
-| FR-ATTEMPT-003 | Tai cau hoi an dap an dung | API tra cau hoi/option khong tra `is_correct` | Must | Attempt hop le | Client khong biet dap an dung | Network tab khong thay truong dap an dung |
-| FR-ANSWER-001 | Autosave dap an | Luu/doi dap an bang upsert | Must | Attempt `in_progress` | Mot ban ghi moi cau hoi | Unique `attempt_id + question_id` ngan trung |
-| FR-ANSWER-002 | Danh dau cau hoi | Student mark/unmark question | Should | Attempt `in_progress` | `is_marked` cap nhat | Refresh van giu trang thai |
-| FR-SUBMIT-001 | Nop bai idempotent | Nop bai nhieu lan khong cham trung bang transaction + row lock | Must | Attempt ton tai | Chi co mot ket qua cuoi | Hai request song song/retry key khac khong doi `finalized_at`/score |
-| FR-SUBMIT-002 | Het gio | Server auto-submit khi qua `deadline_at` | Must | Attempt `in_progress` | Attempt thanh `auto_submitted`, `submit_reason = time_expired`; `expired` chi dung khi khong the cham/phuc hoi hop le | Client sua dong ho khong nop tre |
-| FR-SCORE-001 | Cham diem | Cham trac nghiem mot dap an dung | Must | Attempt submitted | Luu `score` va `max_score` | Ket qua khop dap an seed |
-| FR-RESULT-001 | Xem ket qua | Student xem diem theo cau hinh exam | Must | Attempt cua chinh minh | Hien diem, trang thai, thoi gian | Exam tat ket qua thi khong hien chi tiet |
-| FR-SOLUTION-001 | Xem loi giai | Hien loi giai sau nop neu Admin cho phep | Should | Attempt submitted | Loi giai hien theo cau hinh | Khi tat, API khong tra solution |
-| FR-FULL-001 | Kich hoat fullscreen | Neu exam `fullscreen_required = true`, Student phai vao fullscreen thanh cong truoc khi tao attempt | Must | Browser ho tro Fullscreen API | Fullscreen API duoc goi tu user gesture, sau do server tao attempt | Browser khong ho tro/reject thi khong tao attempt |
-| FR-FULL-002 | Xu ly thoat fullscreen | Overlay chan UI, dem 5 giay, yeu cau bam quay lai | Must | Dang lam bai | Event duoc ghi server | Quay lai trong 5 giay tiep tuc |
-| FR-FULL-003 | Auto-submit vi pham | Qua 5 giay chua quay lai thi nop bai | Must | Vi pham chua resolve | Attempt `auto_submitted`, `submit_reason = fullscreen_violation` | Server xac minh timestamp vi pham |
-| FR-DOC-001 | Tai lieu cong khai | Admin quan ly documents va Guest doc public | Should | Document published | File/link hien o thu vien tai lieu | Guest khong doc private document |
-
-## 9. Non-functional Requirements
-
-| Ma | Ten | Mo ta | Uu tien | Dieu kien truoc | Ket qua mong doi | Tieu chi kiem thu |
-| --- | --- | --- | --- | --- | --- | --- |
-| NFR-PERF-001 | 100 nguoi dong thoi | Ho tro 100 VU bat dau, tai payload, luu, nop bai | Must | Du lieu seed load test | p95 startAttempt <= 800 ms; p95 getAttemptPayload <= 800 ms; p95 saveAnswer <= 500 ms; p95 submitAttempt <= 1200 ms; 5xx < 1% | k6/Artillery dat nguong |
-| NFR-SEC-001 | RLS bat buoc | Bang rieng tu co Supabase RLS | Must | Migration da ap dung | Client chi doc/ghi dung quyen | Test RLS bang token tung role |
-| NFR-SEC-002 | Khong lo dap an | `is_correct` khong tra cho attempt chua nop | Must | Attempt in_progress | Network response khong co dap an dung | E2E kiem Network tab/API |
-| NFR-REL-001 | Idempotency | API submit an toan khi retry | Must | Attempt ton tai | Khong cham/lap submit trung | Test request song song |
-| NFR-AVAIL-001 | Kha dung MVP | He thong hoat dong tren Vercel/Supabase | Should | Cau hinh production | Loi duoc ghi Sentry | Synthetic check pass |
-| NFR-A11Y-001 | Accessibility | UI dung keyboard va screen reader co ban | Should | Component shadcn/ui | Focus state ro, label form day du | Axe khong co loi nghiem trong |
-| NFR-COMPAT-001 | Trinh duyet | Ho tro Chrome, Edge, Firefox, Safari phien ban hien hanh | Must | Thiet bi desktop/mobile pho bien | Chuc nang chinh hoat dong | Playwright chay chromium/firefox/webkit |
-
-## 10. Bao Mat, Hieu Nang, Kha Dung, Tuong Thich
-
-- Bao mat: xem chi tiet tai [roles-permissions.md](./roles-permissions.md). Role tu client khong dang tin cay; route guard phai di kem RLS.
-- Hieu nang: khong ghi dong ho moi giay; autosave chi ghi khi thay doi dap an/debounce hop ly; index cho `exam_attempts`, `attempt_answers`, `exam_events`.
-- Kha dung: loi autosave phai hien trang thai va retry; submit phai co retry idempotent.
-- Tuong thich: Fullscreen API co gioi han tren mobile; xem [fullscreen-policy.md](./fullscreen-policy.md).
-
-## 11. Gia Dinh, Rang Buoc, Rui Ro
-
-### Gia Dinh
-
-- Supabase la nguon xac thuc va database chinh.
-- MVP chi co cau hoi trac nghiem mot dap an dung.
-- MVP khong co lop/nhom/assignment. `access_type = public` cho Guest/Student xem, `students_only` cho Student active, `private` chi Admin xem/preview va khong cho Student/Guest bat dau attempt.
-
-### Rang Buoc
-
-- Chi xay tai lieu trong giai do nay.
-- Thoi gian thi dua tren server.
-- Khong gui dap an dung xuong client truoc khi nop.
-- Attempt da nop khong duoc sua dap an.
-- Guest khong co lich su dai han.
-- Guest attempt dung signed session cookie/token tam thoi do server tao; khong dua vao `attemptId` trong URL de xac dinh owner.
-- Sau publish, noi dung anh huong ket qua bi khoa. Exam da co attempt khong duoc dua ve `draft`; Admin clone exam neu can sua noi dung.
-- Close exam chi chan attempt moi; attempt `in_progress` van duoc autosave/submit den `deadline_at`.
-- Submit reason MVP gom `student_submit`, `time_expired`, `fullscreen_violation`, `account_locked`, `system_recovery`; close exam khong tao submit reason rieng trong MVP.
-
-### Rui Ro
-
-| Rui ro | Tac dong | Giam thieu |
+| Mã yêu cầu | Tiêu chuẩn | Chỉ số đo lường |
 | --- | --- | --- |
-| Fullscreen khong phai chong gian lan tuyet doi | Student co the dung thiet bi khac | Ghi ro gioi han va chi xem la tin hieu han che |
-| Trinh duyet khong ho tro fullscreen | Student khong bat dau duoc exam bat buoc fullscreen | Cau hinh `fullscreen_required` va thong bao de nghi dung desktop browser ho tro |
-| Autosave dong thoi tao ghi trung | Mat/nhan doi dap an | Unique constraint va upsert |
-| 100 submit dong thoi gay cham diem lap | Sai ket qua | Transaction, row lock attempt va khong cham lai attempt final |
-| RLS sai | Lo du lieu rieng | Test RLS bat buoc trong CI |
+| **NFR-PERF-001** | Hiệu năng chịu tải | 100 VU đồng thời: p95 `startAttempt` <= 800ms, p95 `saveAnswer` <= 500ms, p95 `submitAttempt` <= 1200ms |
+| **NFR-SEC-001** | An toàn dữ liệu (RLS) | 100% bảng nhạy cảm được bảo vệ bởi Supabase RLS; học sinh chỉ đọc/ghi dữ liệu của chính mình |
+| **NFR-SEC-002** | Chống lộ đáp án | Tuyệt đối không gửi trường `is_correct` và `explanation` xuống client trước khi nộp bài |
+| **NFR-REL-001** | Tính bất biến (Idempotency) | Thao tác nộp bài song song hoặc gửi lại nhiều lần không làm sai lệch điểm số |
+| **NFR-A11Y-001** | Tiếp cận & Thẩm mỹ | Giao diện hỗ trợ Dark/Light theme, Glassmorphism cao cấp, tương thích bàn phím |
+| **NFR-COMPAT-001** | Khả năng tương thích | Hoạt động hoàn hảo trên Chrome, Edge, Firefox, Safari (Desktop & Tablet) |
 
-## 12. Tieu Chi Hoan Thanh MVP
+---
 
-- Tat ca FR Must dat acceptance test.
-- Tat ca NFR Must dat test tuong ung.
-- Load test 100 VU dat nguong pass/fail trong [acceptance-tests.md](./acceptance-tests.md).
-- Tai lieu schema, RLS, lifecycle va fullscreen duoc doi chieu thong nhat ve trang thai: `draft`, `published`, `closed`, `archived`, `in_progress`, `submitted`, `auto_submitted`, `expired`.
-- Submit reason MVP thong nhat: `student_submit`, `time_expired`, `fullscreen_violation`, `account_locked`, `system_recovery`.
-- Khong co code chuc nang duoc viet trong giai do tai lieu nay.
+## 9. Bảo Mật, Hiệu Năng Và Tính Tương Thích
+
+- **Bảo mật**: Sử dụng Supabase RLS policies kiểm tra vai trò `public.is_admin()`, xác thực quyền sở hữu `auth.uid() = student_id`, kiểm soát token khách `guest_session_hash`.
+- **Hiệu năng**: Các trường khóa ngoại và điều kiện lọc đều được đánh chỉ mục (B-Tree & Partial Indexes); không ghi log đồng hồ đếm ngược từng giây vào database; áp dụng kỹ thuật debounce khi lưu đáp án.
+- **Tương thích**: Hỗ trợ đầy đủ màn hình Responsive từ mobile (375px) đến desktop màn hình rộng (1920px+).
+
+---
+
+## 10. Rủi Ro Và Giải Pháp Khắc Phục
+
+| Rủi ro | Mức độ | Giải pháp kỹ thuật đã triển khai |
+| --- | --- | --- |
+| Thí sinh ngắt mạng khi đang thi | Trung bình | Client lưu tạm đáp án và tự động gửi lại khi có mạng; thời gian thi vẫn chốt theo server deadline |
+| Trình duyệt không hỗ trợ Fullscreen | Thấp | Kiểm tra trước khi bắt đầu bài; hiển thị thông báo hướng dẫn thí sinh sử dụng trình duyệt phù hợp |
+| Nộp bài trùng lặp khi mạng chập chờn | Thấp | Áp dụng Transaction + Row-level lock (`SELECT ... FOR UPDATE`) và cơ chế Idempotency |
+| Xóa nhầm đề thi đang có người làm | Trung bình | Hộp thoại xác nhận hành động nguy hiểm căn trái rõ ràng; tự động kết thúc an toàn các bài đang làm |

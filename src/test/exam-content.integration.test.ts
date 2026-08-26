@@ -39,9 +39,25 @@ describe("exam content schema, RLS and RPC", () => {
   }
 
   it("enforces catalog access by role", async () => {
+    const service = client(serviceRoleKey);
+    await service.from("profiles").update({ status: "active" }).eq("id", "10000000-0000-0000-0000-000000000002");
+    await service.from("exams").update({ deleted_at: null }).eq("id", "40000000-0000-0000-0000-000000000003");
+    await service.from("exam_sections").update({ deleted_at: null }).eq("exam_id", "40000000-0000-0000-0000-000000000003");
+    const { data: secs } = await service.from("exam_sections").select("id").eq("exam_id", "40000000-0000-0000-0000-000000000003");
+    if (secs && secs.length > 0) {
+      await service.from("questions").update({ deleted_at: null, is_active: true }).in("section_id", secs.map(s => s.id));
+      const { data: qs } = await service.from("questions").select("id").in("section_id", secs.map(s => s.id));
+      if (qs && qs.length > 0) {
+        await service.from("question_options").update({ deleted_at: null, is_active: true }).in("question_id", qs.map(q => q.id));
+      }
+    }
+
     const guest = client();
     const student = await signedIn("student1@example.test", "LocalStudent123!");
     const admin = await signedIn("admin@example.test", "LocalAdmin123!");
+
+    await admin.rpc("return_exam_to_draft", { exam_id: "40000000-0000-0000-0000-000000000003" });
+    await admin.rpc("publish_exam", { exam_id: "40000000-0000-0000-0000-000000000003" });
 
     const { data: guestExams, error: guestError } = await guest.from("exams").select("slug, access_type, status");
     expect(guestError).toBeNull();
@@ -186,5 +202,64 @@ describe("exam content schema, RLS and RPC", () => {
       .single();
     expect(duplicateResult?.success).toBe(false);
     expect(duplicateResult?.code).toBe("CLONE_SLUG_NOT_UNIQUE");
+  });
+
+  it("allows deleting published exams and cascades soft deletion", async () => {
+    const admin = await signedIn("admin@example.test", "LocalAdmin123!");
+    const service = client(serviceRoleKey);
+    const suffix = crypto.randomUUID().slice(0, 8);
+
+    const { data: exam, error: examError } = await service
+      .from("exams")
+      .insert({
+        subject_id: "20000000-0000-0000-0000-000000000001",
+        category_id: "30000000-0000-0000-0000-000000000001",
+        title: `Đề kiểm thử delete ${suffix}`,
+        slug: `de-kiem-thu-delete-${suffix}`,
+        access_type: "public",
+        duration_minutes: 30,
+        created_by: "10000000-0000-0000-0000-000000000001",
+        updated_by: "10000000-0000-0000-0000-000000000001",
+      })
+      .select("id")
+      .single();
+    expect(examError).toBeNull();
+
+    const { data: section } = await service
+      .from("exam_sections")
+      .insert({ exam_id: exam!.id, title: "Phần xóa", position: 1 })
+      .select("id")
+      .single();
+    const { data: question } = await service
+      .from("questions")
+      .insert({ section_id: section!.id, content: "Câu hỏi cần xóa.", score: 2, position: 1 })
+      .select("id")
+      .single();
+    await service.from("question_options").insert([
+      { question_id: question!.id, content: "Lựa chọn A", position: 1, is_correct: true },
+      { question_id: question!.id, content: "Lựa chọn B", position: 2, is_correct: false },
+    ]);
+
+    // Publish exam
+    await admin.rpc("publish_exam", { exam_id: exam!.id });
+
+    // Verify it is published
+    const { data: pubExam } = await service.from("exams").select("status").eq("id", exam!.id).single();
+    expect(pubExam?.status).toBe("published");
+
+    // Delete the published exam via delete_exam RPC
+    const { data: deleteResult, error: deleteError } = await admin.rpc("delete_exam", { p_exam_id: exam!.id }).single();
+    expect(deleteError).toBeNull();
+    expect(deleteResult?.success).toBe(true);
+
+    // Verify exam and related items are soft deleted
+    const { data: deletedExam } = await service.from("exams").select("deleted_at").eq("id", exam!.id).single();
+    expect(deletedExam?.deleted_at).not.toBeNull();
+
+    const { data: deletedSection } = await service.from("exam_sections").select("deleted_at").eq("id", section!.id).single();
+    expect(deletedSection?.deleted_at).not.toBeNull();
+
+    const { data: deletedQuestion } = await service.from("questions").select("deleted_at").eq("id", question!.id).single();
+    expect(deletedQuestion?.deleted_at).not.toBeNull();
   });
 });

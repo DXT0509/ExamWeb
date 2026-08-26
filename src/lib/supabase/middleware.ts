@@ -5,7 +5,7 @@ import { getHomePathForRole, getSafeNextPath } from "@/lib/auth/redirects";
 import type { Database } from "@/types/database";
 
 export async function updateSession(request: NextRequest) {
-  let response = NextResponse.next({ request });
+  let response = NextResponse.next();
   const env = parseClientEnv(process.env);
 
   const supabase = createServerClient<Database>(
@@ -18,7 +18,7 @@ export async function updateSession(request: NextRequest) {
         },
         setAll(cookiesToSet) {
           cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
-          response = NextResponse.next({ request });
+          response = NextResponse.next();
           cookiesToSet.forEach(({ name, value, options }) => {
             response.cookies.set(name, value, options);
           });

@@ -1,5 +1,4 @@
 "use server";
-import { redirect } from "next/navigation";
 import { isRedirectError } from "next/dist/client/components/redirect-error";
 import { createClient } from "@/lib/supabase/server";
 import { ensureGuestSessionToken, getGuestSessionHash } from "@/lib/exams/guest-session";
@@ -70,6 +69,7 @@ export type StudentAttemptResult = {
   attempt_id: string;
   exam_id: string;
   exam_title: string;
+  is_guest?: boolean;
   status: "in_progress" | "submitted" | "auto_submitted" | "expired";
   submit_reason: "student_submit" | "time_expired" | "fullscreen_violation" | "account_locked" | "system_recovery" | null;
   started_at: string;
@@ -132,8 +132,6 @@ export async function startAttemptAction(rawExamId: string): Promise<
   | { success: true; attemptId: string; isExisting: boolean; deadlineAt: string }
   | { success: false; error: string }
 > {
-  let targetAttemptId: string | null = null;
-
   try {
     const parse = startAttemptSchema.safeParse({ examId: rawExamId });
     if (!parse.success) {

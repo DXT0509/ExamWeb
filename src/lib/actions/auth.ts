@@ -122,6 +122,7 @@ export async function updateProfileAction(_state: ActionState, formData: FormDat
   const { error } = await supabase.from("profiles").update({ display_name: parsed.data.displayName }).eq("id", user.id);
   if (error) return { error: "Không thể cập nhật hồ sơ lúc này. Vui lòng thử lại." };
 
+  revalidatePath("/profile");
   revalidatePath("/student/profile");
   return { success: "Đã cập nhật hồ sơ." };
 }

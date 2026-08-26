@@ -44,7 +44,7 @@ export const examDraftSchema = z
     subjectId: postgresUuidSchema("Môn học không hợp lệ."),
     categoryId: postgresUuidSchema("Danh mục không hợp lệ.").nullable().optional(),
     title: z.string().trim().min(2, "Đề thi phải có tiêu đề.").max(200, "Tiêu đề không được vượt quá 200 ký tự."),
-    slug: slugSchema,
+    slug: slugSchema.optional(),
     description: optionalText(1000, "Mô tả không được vượt quá 1000 ký tự."),
     accessType: z.enum(["public", "students_only", "private"]),
     allowGuestAttempt: z.boolean(),
@@ -72,8 +72,8 @@ export const sectionSchema = z.object({
 export const questionSchema = z.object({
   sectionId: postgresUuidSchema("Phần thi không hợp lệ.").optional(),
   questionId: postgresUuidSchema("Câu hỏi không hợp lệ.").optional(),
-  content: z.string().trim().min(1, "Nội dung câu hỏi không được để trống."),
-  imagePath: optionalText(500, "Đường dẫn ảnh không được vượt quá 500 ký tự."),
+  content: z.string().trim(),
+  imagePath: optionalText(5000000, "Đường dẫn ảnh không được vượt quá 5MB."),
   explanation: optionalText(2000, "Lời giải không được vượt quá 2000 ký tự."),
   score: z.number().positive("Điểm câu hỏi phải lớn hơn 0."),
   position: z.number().int("Thứ tự câu hỏi phải là số nguyên.").min(1, "Thứ tự câu hỏi phải lớn hơn hoặc bằng 1."),
@@ -100,6 +100,35 @@ export const reorderSchema = z.object({
   orderedIds: z.array(postgresUuidSchema("Mã sắp xếp không hợp lệ.")).min(1, "Cần có ít nhất một mục để sắp xếp."),
 });
 
+export const ALLOWED_IMAGE_MIMES = [
+  "image/png",
+  "image/jpeg",
+  "image/jpg",
+  "image/webp",
+  "image/gif",
+];
+export const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024; // 5MB
+
+export function validateQuestionImageFile(file: File | null): { ok: true } | { ok: false; error: string } {
+  if (!file || !(file instanceof File) || file.size === 0) {
+    return { ok: false, error: "Vui lòng chọn tệp hình ảnh hợp lệ." };
+  }
+
+  if (file.size > MAX_IMAGE_SIZE_BYTES) {
+    return { ok: false, error: "Dung lượng hình ảnh không được vượt quá 5MB." };
+  }
+
+  const mime = (file.type || "").toLowerCase();
+  if (!ALLOWED_IMAGE_MIMES.includes(mime)) {
+    return {
+      ok: false,
+      error: "Định dạng không được hỗ trợ. Vui lòng chọn ảnh PNG, JPG, WebP hoặc GIF.",
+    };
+  }
+
+  return { ok: true };
+}
+
 export type SubjectInput = z.infer<typeof subjectSchema>;
 export type CategoryInput = z.infer<typeof categorySchema>;
 export type ExamDraftInput = z.infer<typeof examDraftSchema>;
@@ -107,3 +136,4 @@ export type SectionInput = z.infer<typeof sectionSchema>;
 export type QuestionInput = z.infer<typeof questionSchema>;
 export type OptionInput = z.infer<typeof optionSchema>;
 export type CloneExamInput = z.infer<typeof cloneExamSchema>;
+

@@ -136,10 +136,13 @@ describe("Phase 7: Exam Engine Core Integration Tests", () => {
     const { data: startRes } = await student1.rpc("start_attempt", { p_exam_id: publicExamId });
     const attemptId1 = startRes?.[0]?.attempt_id ?? "";
 
-    // Find a valid question and option
+    // Find a valid question and option belonging to publicExamId
+    const { data: sections } = await service.from("exam_sections").select("id").eq("exam_id", publicExamId);
+    const sectionIds = (sections ?? []).map((s) => s.id);
     const { data: questions } = await service
       .from("questions")
-      .select("id, section_id")
+      .select("id")
+      .in("section_id", sectionIds)
       .limit(1);
     const questionId = questions?.[0]?.id ?? "";
 

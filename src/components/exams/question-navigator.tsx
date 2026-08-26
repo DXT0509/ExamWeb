@@ -26,7 +26,7 @@ export function QuestionNavigator({
     return (
       <div className="grid grid-cols-5 gap-2" aria-label="Danh sách câu hỏi">
         {Array.from({ length: 10 }, (_, index) => (
-          <Button key={index} variant={index === 0 ? "default" : "outline"} size="sm">
+          <Button key={index} variant={index === 0 ? "default" : "outline"} size="sm" className="rounded-xl">
             {index + 1}
           </Button>
         ))}
@@ -51,32 +51,33 @@ export function QuestionNavigator({
               onClick={() => onSelectQuestion(item.index)}
               aria-label={`Câu ${item.index} — ${labelState}`}
               className={cn(
-                "relative font-medium transition-colors",
-                isCurrent && "ring-2 ring-primary ring-offset-2",
-                item.isMarked && "border-amber-500 bg-amber-50 text-amber-900 hover:bg-amber-100 dark:bg-amber-950 dark:text-amber-100",
-                !isCurrent && item.isAnswered && !item.isMarked && "bg-emerald-50 text-emerald-900 border-emerald-300 hover:bg-emerald-100 dark:bg-emerald-950 dark:text-emerald-100"
+                "relative font-semibold transition-all rounded-xl cursor-pointer text-xs h-9",
+                isCurrent && "bg-[var(--primary)] text-white ring-2 ring-[var(--ring)] ring-offset-2 ring-offset-[var(--background)] shadow-md shadow-blue-600/30",
+                item.isMarked && "border-amber-500/50 bg-amber-500/15 text-amber-700 dark:text-amber-300 hover:bg-amber-500/25",
+                !isCurrent && item.isAnswered && !item.isMarked && "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/25",
+                !isCurrent && !item.isAnswered && !item.isMarked && "border-[var(--border)] bg-[var(--surface)] text-[var(--muted-foreground)] hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)]"
               )}
             >
               {item.index}
               {item.isMarked && (
-                <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5 rounded-full bg-amber-500" title="Đã đánh dấu" />
+                <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5 rounded-full bg-amber-500 shadow-sm" title="Đã đánh dấu" />
               )}
             </Button>
           );
         })}
       </div>
 
-      <div className="flex flex-wrap items-center justify-between text-xs text-[var(--muted-foreground)] gap-2 pt-2 border-t">
+      <div className="flex flex-wrap items-center justify-between text-xs text-[var(--muted-foreground)] gap-2 pt-3 border-t border-[var(--divider)]">
         <div className="flex items-center gap-1.5">
-          <span className="h-3 w-3 rounded border bg-white dark:bg-slate-900 inline-block" />
+          <span className="h-3 w-3 rounded border border-[var(--border)] bg-[var(--surface)] inline-block" />
           <span>Chưa làm</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <span className="h-3 w-3 rounded bg-emerald-100 border border-emerald-300 inline-block" />
+          <span className="h-3 w-3 rounded bg-emerald-500/20 border border-emerald-500/40 inline-block" />
           <span>Đã làm</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <span className="h-3 w-3 rounded bg-amber-100 border border-amber-500 inline-block" />
+          <span className="h-3 w-3 rounded bg-amber-500/20 border border-amber-500/40 inline-block" />
           <span>Đánh dấu</span>
         </div>
       </div>

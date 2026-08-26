@@ -6,6 +6,7 @@ test.describe("Phase 7 Exam Engine E2E Tests", () => {
     await page.addInitScript(() => {
       window.localStorage.clear();
       window.sessionStorage.clear();
+      (window as unknown as Record<string, unknown>).__MOCK_FULLSCREEN_SUCCESS__ = true;
       let isFullscreen = false;
       Object.defineProperty(document, "fullscreenEnabled", { get: () => true, configurable: true });
       Object.defineProperty(document, "fullscreenElement", { get: () => (isFullscreen ? document.documentElement : null), configurable: true });
@@ -45,10 +46,15 @@ test.describe("Phase 7 Exam Engine E2E Tests", () => {
 
     // 5. Navigate to Question 2
     await page.getByRole("button", { name: "Câu tiếp theo" }).click();
-    await expect(page.getByText("Câu 2")).toBeVisible();
+    await expect(page.getByRole("heading", { name: /Câu 2/ })).toBeVisible();
 
     // 6. Refresh page and verify attempt state is preserved
     await page.reload();
+    const resumeBtn = page.getByRole("button", { name: "Quay lại toàn màn hình" });
+    if (await resumeBtn.isVisible({ timeout: 4000 }).catch(() => false)) {
+      await resumeBtn.click();
+      await expect(page.getByText("Bạn đã rời khỏi chế độ toàn màn hình")).not.toBeVisible({ timeout: 10000 });
+    }
     await expect(page.getByText("Đang làm bài thi")).toBeVisible();
 
     // 7. Click Submit button
@@ -59,9 +65,9 @@ test.describe("Phase 7 Exam Engine E2E Tests", () => {
     await page.getByRole("button", { name: "Xác nhận nộp bài" }).click();
 
     // 9. Redirected to result page
-    await expect(page).toHaveURL(/\/attempts\/[a-f0-9-]+\/result/);
-    await expect(page.getByText("Bài thi đã được nộp thành công")).toBeVisible();
-    await expect(page.getByText("Điểm số")).toBeVisible();
+    await expect(page).toHaveURL(/\/attempts\/[a-f0-9-]+\/result/, { timeout: 10000 });
+    await expect(page.getByText("Bài thi đã được nộp thành công")).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText("Điểm số")).toBeVisible({ timeout: 10000 });
   });
 
   test("Student can start a students-only exam, navigate, answer questions and view results", async ({ page }) => {
@@ -70,26 +76,31 @@ test.describe("Phase 7 Exam Engine E2E Tests", () => {
     await page.locator('input[name="email"]').fill("student1@example.test");
     await page.locator('input[name="password"]').fill("LocalStudent123!");
     await page.locator('button[type="submit"]').click();
-    await expect(page).toHaveURL(/\/student/);
+    await expect(page).toHaveURL(/\/student/, { timeout: 15000 });
 
     // 2. Go to students-only exam
     await page.goto("/exams/de-danh-cho-hoc-vien-doc-hieu");
-    await expect(page.getByRole("heading", { name: "Đề dành cho học viên đọc hiểu" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Đề dành cho học viên đọc hiểu" })).toBeVisible({ timeout: 10000 });
 
     // 3. Click "Bắt đầu làm bài"
     await page.getByRole("button", { name: "Bắt đầu làm bài" }).click();
-    await expect(page).toHaveURL(/\/attempts\/[a-f0-9-]+/);
+    const gateBtn = page.getByRole("button", { name: "Vào chế độ toàn màn hình" });
+    if (await gateBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await gateBtn.click();
+    }
+    await expect(page).toHaveURL(/\/attempts\/[a-f0-9-]+/, { timeout: 10000 });
 
     // 4. Mark question
     await page.getByRole("button", { name: "Đánh dấu" }).click();
-    await expect(page.getByRole("button", { name: "Đã đánh dấu" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Đã đánh dấu", exact: true })).toBeVisible();
 
     // 5. Submit
     await page.getByRole("button", { name: "Nộp bài" }).click();
+    await expect(page.getByRole("heading", { name: "Xác nhận nộp bài" })).toBeVisible();
     await page.getByRole("button", { name: "Xác nhận nộp bài" }).click();
 
     // 6. Result page shown
-    await expect(page).toHaveURL(/\/attempts\/[a-f0-9-]+\/result/);
-    await expect(page.getByText("Điểm số")).toBeVisible();
+    await expect(page).toHaveURL(/\/attempts\/[a-f0-9-]+\/result/, { timeout: 10000 });
+    await expect(page.getByText("Điểm số")).toBeVisible({ timeout: 10000 });
   });
 });

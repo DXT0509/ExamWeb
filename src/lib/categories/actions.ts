@@ -47,5 +47,5 @@ export async function deleteCategoryAction(_state: ActionState, formData: FormDa
     .is("deleted_at", null);
   if (error) return { ok: false, message: getDatabaseErrorMessage(error) };
   revalidatePath("/admin/categories");
-  return { ok: true, message: "Đã xóa mềm danh mục kỳ thi." };
+  return { ok: true, message: "Đã xóa danh mục kỳ thi." };
 }

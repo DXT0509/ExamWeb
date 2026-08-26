@@ -10,7 +10,7 @@ const catalogParamsSchema = z.object({
   subject: z.string().trim().regex(/^[a-z0-9-]+$/).catch(""),
   category: z.string().trim().regex(/^[a-z0-9-]+$/).catch(""),
   page: z.coerce.number().int().min(1).catch(1),
-  pageSize: z.coerce.number().int().min(1).max(24).catch(12),
+  pageSize: z.coerce.number().int().min(1).max(24).catch(24),
 });
 
 export function parseExamCatalogParams(searchParams: Record<string, string | string[] | undefined>): ExamCatalogParams {
@@ -90,19 +90,43 @@ export async function getStudentAvailableExams(params: ExamCatalogParams) {
   return listCatalog(params, true);
 }
 
-export async function getFeaturedExams(limit = 6) {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("public_exam_catalog")
-    .select("*")
-    .eq("access_type", "public")
-    .order("published_at", { ascending: false, nullsFirst: false })
-    .limit(limit);
-  if (error) {
-    console.error("Không thể tải đề thi nổi bật.", error);
+export async function getFeaturedExams(limit = 24, includeStudentsOnly = true) {
+  try {
+    const res = await listCatalog(
+      {
+        q: "",
+        subject: "",
+        category: "",
+        page: 1,
+        pageSize: Math.min(48, Math.max(limit * 2, 24)),
+      },
+      includeStudentsOnly
+    );
+
+    // Sort strictly from newest to oldest by publishedAt timestamp
+    const sorted = [...res.items].sort((a, b) => {
+      const timeA = a.publishedAt ? new Date(a.publishedAt).getTime() : 0;
+      const timeB = b.publishedAt ? new Date(b.publishedAt).getTime() : 0;
+      return timeB - timeA;
+    });
+
+    // Ensure all items are strictly distinct (phân biệt đôi một) by examId / slug
+    const seen = new Set<string>();
+    const distinct: ExamCatalogItem[] = [];
+    for (const item of sorted) {
+      const key = item.examId || item.slug;
+      if (key && !seen.has(key)) {
+        seen.add(key);
+        distinct.push(item);
+        if (distinct.length >= limit) break;
+      }
+    }
+
+    return distinct;
+  } catch (error) {
+    console.error("Không thể tải đề thi mới nhất.", error);
     return [];
   }
-  return (data ?? []).map(mapCatalogRow);
 }
 
 export async function getExamBySlug(slug: string) {

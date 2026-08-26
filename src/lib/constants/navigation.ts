@@ -8,7 +8,7 @@ export const studentLinks = [
   { href: "/student", label: "Tổng quan" },
   { href: "/exams", label: "Đề thi" },
   { href: "/student/history", label: "Lịch sử" },
-  { href: "/student/profile", label: "Hồ sơ" },
+  { href: "/profile", label: "Hồ sơ" },
 ];
 
 export const adminLinks = [

@@ -60,22 +60,22 @@ export function FullscreenViolationOverlay({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/90 p-4 text-white backdrop-blur-md animate-in fade-in"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 text-[var(--foreground)] backdrop-blur-md animate-in fade-in"
       role="alertdialog"
       aria-modal="true"
       aria-labelledby="fullscreen-violation-title"
       aria-describedby="fullscreen-violation-desc"
     >
-      <div className="w-full max-w-md rounded-xl bg-white p-6 text-slate-950 shadow-2xl dark:bg-slate-900 dark:text-slate-100 text-center space-y-5 border border-red-200 dark:border-red-900">
-        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-red-100 text-red-600 dark:bg-red-950 dark:text-red-400 animate-pulse">
+      <div className="w-full max-w-md rounded-2xl bg-[var(--surface)] p-6 text-[var(--foreground)] shadow-2xl text-center space-y-5 border border-rose-500/40">
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30 animate-pulse">
           <AlertTriangle className="h-8 w-8" />
         </div>
 
-        <h2 id="fullscreen-violation-title" className="text-xl font-bold text-red-600 dark:text-red-400">
+        <h2 id="fullscreen-violation-title" className="text-xl font-bold text-rose-600 dark:text-rose-400">
           Bạn đã rời khỏi chế độ toàn màn hình
         </h2>
 
-        <p id="fullscreen-violation-desc" className="text-sm text-slate-700 dark:text-slate-300 font-medium">
+        <p id="fullscreen-violation-desc" className="text-sm text-[var(--foreground)] font-medium">
           Vui lòng quay lại chế độ toàn màn hình.
         </p>
 
@@ -88,17 +88,17 @@ export function FullscreenViolationOverlay({
           </div>
         ) : (
           <div className="py-2 space-y-1">
-            <div className="text-4xl font-extrabold font-mono text-red-600 dark:text-red-400">
+            <div className="text-4xl font-extrabold font-mono text-rose-600 dark:text-rose-400">
               {remainingSeconds} <span className="text-base font-normal">giây</span>
             </div>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
+            <p className="text-xs text-[var(--muted-foreground)]">
               Bài thi sẽ tự động nộp nếu bạn không quay lại.
             </p>
           </div>
         )}
 
         {returnError && (
-          <p className="text-xs font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/50 p-2 rounded border border-red-200 dark:border-red-900">
+          <p className="text-xs font-medium text-rose-700 dark:text-rose-300 bg-rose-500/10 p-2.5 rounded-xl border border-rose-500/30">
             {returnError}
           </p>
         )}
@@ -106,7 +106,7 @@ export function FullscreenViolationOverlay({
         <Button
           onClick={handleReturnClick}
           disabled={isReturning || isAutoSubmitting}
-          className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold h-11 text-base shadow-md"
+          className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold h-11 text-base shadow-lg shadow-emerald-600/25 rounded-xl"
         >
           {isReturning ? (
             <>

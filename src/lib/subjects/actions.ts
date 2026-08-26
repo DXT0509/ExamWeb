@@ -47,5 +47,5 @@ export async function deleteSubjectAction(_state: ActionState, formData: FormDat
     .is("deleted_at", null);
   if (error) return { ok: false, message: getDatabaseErrorMessage(error) };
   revalidatePath("/admin/subjects");
-  return { ok: true, message: "Đã xóa mềm môn học." };
+  return { ok: true, message: "Đã xóa môn học." };
 }

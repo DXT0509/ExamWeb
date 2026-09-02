@@ -184,84 +184,145 @@ export default async function AdminAttemptDetailPage({
           <CardTitle className="text-base font-bold text-[var(--foreground)]">Chi tiết câu trả lời ({attempt.questionsDetail.length} câu)</CardTitle>
         </CardHeader>
         <CardContent className="space-y-6 pt-5">
-          {attempt.questionsDetail.map((q, idx) => (
-            <div
-              key={q.questionId}
-              className="rounded-2xl border border-[var(--border)] bg-[var(--card-secondary)] p-4 sm:p-5 text-sm space-y-3"
-            >
-              <div className="flex items-start justify-between gap-4">
-                <div className="font-semibold text-[var(--foreground)]">
-                  Câu {idx + 1}: {q.content}
+          {attempt.questionsDetail.map((q, idx) => {
+            const isTf = q.questionType === "true_false_group";
+            const isShort = q.questionType === "short_answer";
+
+            return (
+              <div
+                key={q.questionId}
+                className="rounded-2xl border border-[var(--border)] bg-[var(--card-secondary)] p-4 sm:p-5 text-sm space-y-3"
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div className="font-semibold text-[var(--foreground)]">
+                    Câu {idx + 1}: {q.content}
+                    <span className="ml-2 text-xs font-normal text-[var(--muted-foreground)]">
+                      ({isTf ? "Đúng/Sai" : isShort ? "Trả lời ngắn" : "Trắc nghiệm"} · {q.score}đ)
+                    </span>
+                  </div>
+                  <div>
+                    {q.isCorrect ? (
+                      <Badge className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20">
+                        Đúng (+{q.score} điểm)
+                      </Badge>
+                    ) : (
+                      <Badge className="bg-rose-500/10 text-rose-700 dark:text-rose-400 border border-rose-500/20">
+                        Chưa đạt tối đa
+                      </Badge>
+                    )}
+                  </div>
                 </div>
-                <div>
-                  {q.selectedOptionId === null ? (
-                    <Badge className="bg-[var(--surface-hover)] text-[var(--muted-foreground)] border border-[var(--border)]">
-                      Chưa trả lời
-                    </Badge>
-                  ) : q.isCorrect ? (
-                    <Badge className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20">
-                      Đúng (+{q.score} điểm)
-                    </Badge>
-                  ) : (
-                    <Badge className="bg-rose-500/10 text-rose-700 dark:text-rose-400 border border-rose-500/20">
-                      Sai (0 điểm)
-                    </Badge>
-                  )}
-                </div>
-              </div>
 
-              {/* Options breakdown */}
-              <div className="space-y-1.5 pl-2">
-                {q.options.map((opt) => {
-                  const isSelected = opt.id === q.selectedOptionId;
-                  const isCorrect = opt.isCorrect;
+                {/* Multiple Choice Breakdown */}
+                {!isTf && !isShort && (
+                  <div className="space-y-1.5 pl-2">
+                    {q.options.map((opt) => {
+                      const isSelected = opt.id === q.selectedOptionId;
+                      const isCorrect = opt.isCorrect;
 
-                  let optionStyle = "border-[var(--border)] bg-[var(--surface)] text-[var(--foreground)]";
-                  if (isSelected && isCorrect) {
-                    optionStyle = "border-emerald-500 bg-emerald-500/15 text-[var(--foreground)] font-semibold";
-                  } else if (isSelected && !isCorrect) {
-                    optionStyle = "border-rose-500 bg-rose-500/15 text-[var(--foreground)] font-semibold";
-                  } else if (isCorrect) {
-                    optionStyle = "border-emerald-500/30 bg-emerald-500/10 text-[var(--foreground)]";
-                  }
+                      let optionStyle = "border-[var(--border)] bg-[var(--surface)] text-[var(--foreground)]";
+                      if (isSelected && isCorrect) {
+                        optionStyle = "border-emerald-500 bg-emerald-500/15 text-[var(--foreground)] font-semibold";
+                      } else if (isSelected && !isCorrect) {
+                        optionStyle = "border-rose-500 bg-rose-500/15 text-[var(--foreground)] font-semibold";
+                      } else if (isCorrect) {
+                        optionStyle = "border-emerald-500/30 bg-emerald-500/10 text-[var(--foreground)]";
+                      }
 
-                  return (
-                    <div
-                      key={opt.id}
-                      className={`flex items-center justify-between rounded-xl border px-3.5 py-2.5 text-xs ${optionStyle}`}
-                    >
-                      <div>
-                        <span className="font-semibold mr-2">
-                          {String.fromCharCode(65 + opt.position)}:
+                      return (
+                        <div
+                          key={opt.id}
+                          className={`flex items-center justify-between rounded-xl border px-3.5 py-2.5 text-xs ${optionStyle}`}
+                        >
+                          <div>
+                            <span className="font-semibold mr-2">
+                              {String.fromCharCode(65 + opt.position - 1)}:
+                            </span>
+                            {opt.content}
+                          </div>
+                          <div className="flex gap-2">
+                            {isSelected && (
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--muted-foreground)] bg-[var(--surface-hover)] px-2 py-0.5 rounded border border-[var(--border)]">
+                                (Học sinh chọn)
+                              </span>
+                            )}
+                            {isCorrect && (
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-400 bg-emerald-500/20 px-2 py-0.5 rounded border border-emerald-500/30">
+                                (Đáp án đúng)
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* True / False Group Breakdown */}
+                {isTf && (
+                  <div className="space-y-2 pl-2">
+                    {q.options.map((opt, oIdx) => {
+                      const letter = ["a", "b", "c", "d", "e"][oIdx] || `${oIdx + 1}`;
+                      const studentVal = q.subAnswers?.[opt.id];
+                      const isMatch = studentVal !== undefined && studentVal === opt.isCorrect;
+
+                      return (
+                        <div
+                          key={opt.id}
+                          className={`flex items-center justify-between rounded-xl border p-2.5 text-xs ${
+                            isMatch ? "border-emerald-500/30 bg-emerald-500/5" : "border-rose-500/30 bg-rose-500/5"
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold">{letter})</span>
+                            <span>{opt.content}</span>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <span>
+                              Học sinh chọn:{" "}
+                              <strong>{studentVal === true ? "Đúng" : studentVal === false ? "Sai" : "Chưa chọn"}</strong>
+                            </span>
+                            <span>
+                              Đáp án chuẩn: <strong>{opt.isCorrect ? "Đúng" : "Sai"}</strong>
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Short Answer Breakdown */}
+                {isShort && (
+                  <div className="pl-2 space-y-1 text-xs">
+                    <p>
+                      Câu trả lời của học sinh: <strong className="font-mono text-sm">{q.textAnswer || "Chưa trả lời"}</strong>
+                    </p>
+                    <p className="flex items-center gap-2">
+                      <span>Đáp án chuẩn: <strong className="font-mono text-sm text-emerald-600 dark:text-emerald-400">{q.correctAnswerRaw || "—"}</strong></span>
+                      {q.tolerance !== undefined && q.tolerance !== null && q.tolerance > 0 ? (
+                        <span className="text-[11px] font-mono text-blue-700 dark:text-blue-300 bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20">
+                          (Sai số: ± {q.tolerance})
                         </span>
-                        {opt.content}
-                      </div>
-                      <div className="flex gap-2">
-                        {isSelected && (
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--muted-foreground)] bg-[var(--surface-hover)] px-2 py-0.5 rounded border border-[var(--border)]">
-                            (Học sinh chọn)
-                          </span>
-                        )}
-                        {isCorrect && (
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-400 bg-emerald-500/20 px-2 py-0.5 rounded border border-emerald-500/30">
-                            (Đáp án đúng)
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+                      ) : (
+                        <span className="text-[11px] text-[var(--muted-foreground)] bg-[var(--surface-hover)] px-2 py-0.5 rounded border border-[var(--border)]">
+                          (Sai số: Không cho phép)
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                )}
 
-              {/* Explanation */}
-              {q.explanation && (
-                <div className="mt-2 rounded-xl bg-blue-500/10 border border-blue-500/20 p-3 text-xs text-blue-900 dark:text-blue-200 space-y-1">
-                  <span className="font-bold text-blue-600 dark:text-blue-400">💡 Giải thích: </span>
-                  <span className="text-[var(--foreground)]">{q.explanation}</span>
-                </div>
-              )}
-            </div>
-          ))}
+                {/* Explanation */}
+                {q.explanation && (
+                  <div className="mt-2 rounded-xl bg-blue-500/10 border border-blue-500/20 p-3 text-xs text-blue-900 dark:text-blue-200 space-y-1">
+                    <span className="font-bold text-blue-600 dark:text-blue-400">💡 Giải thích: </span>
+                    <span className="text-[var(--foreground)]">{q.explanation}</span>
+                  </div>
+                )}
+              </div>
+            );
+          })}
 
           {attempt.questionsDetail.length === 0 && (
             <p className="py-4 text-center text-sm text-[var(--muted-foreground)]">

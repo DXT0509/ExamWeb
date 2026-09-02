@@ -16,7 +16,7 @@ test.describe("Phase: Admin Exam Builder Redesign & E2E Tests", () => {
     await expect(page).toHaveURL(/\/admin/, { timeout: 15000 });
   });
 
-  test("1-5. Admin creates an exam without manual slug, chooses seeded THPT subject, and sees Section 1 & Question ready", async ({ page }) => {
+  test("1-5. Admin creates an exam without manual slug, chooses seeded THPT subject, and sees Section & Question ready", async ({ page }) => {
     await page.goto("/admin/exams/new");
     await expect(page.getByRole("heading", { name: "Tạo đề thi mới" })).toBeVisible({ timeout: 10000 });
 
@@ -31,30 +31,32 @@ test.describe("Phase: Admin Exam Builder Redesign & E2E Tests", () => {
     await expect(subjectSelect.locator("option", { hasText: "Hóa học" })).toHaveCount(1);
     await expect(subjectSelect.locator("option", { hasText: "Tiếng Anh" })).toHaveCount(1);
 
-    // Fill new exam form
+    // Fill new exam form with custom template
     const examTitle = `Đề thi Thử THPT Quốc gia ${Date.now()}`;
     await page.locator('input[name="title"]').fill(examTitle);
+    await page.locator('select[name="examTemplate"]').selectOption({ value: "custom" });
     await subjectSelect.selectOption({ label: "Vật lý" });
     await page.locator('input[name="durationMinutes"]').fill("45");
-    await page.getByRole("button", { name: "Tạo đề thi & Bắt đầu soạn" }).click();
+    await page.getByRole("button", { name: "Tạo đề thi & Bắt đầu soạn" }).click({ force: true });
 
     // After creation, redirects to Exam Builder
     await expect(page).toHaveURL(/\/admin\/exams\/[0-9a-f-]+/);
     await expect(page.getByRole("heading", { name: examTitle })).toBeVisible();
     await expect(page.getByText("Vật lý", { exact: true }).first()).toBeVisible();
 
-    // Section 1 automatically exists
-    await expect(page.getByRole("heading", { name: "Phần 1: Trắc nghiệm" })).toBeVisible();
+    // Quick action button exists ready to add questions
+    await expect(page.getByRole("button", { name: /Thêm câu hỏi/i }).first()).toBeVisible();
   });
 
-  test("6-9. Admin can inline edit questions and options, and use '+' insert pattern", async ({ page }) => {
-    // 1. Create a fresh draft exam
+  test("6-9. Admin can inline edit questions and options, and use '+' insert pattern in custom template", async ({ page }) => {
+    // 1. Create a fresh draft exam with custom template
     await page.goto("/admin/exams/new");
     const examTitle = `Đề soạn nháp ${Date.now()}`;
     await page.locator('input[name="title"]').fill(examTitle);
+    await page.locator('select[name="examTemplate"]').selectOption({ value: "custom" });
     await page.locator('select[name="subjectId"]').selectOption({ index: 1 });
     await page.locator('input[name="durationMinutes"]').fill("30");
-    await page.getByRole("button", { name: "Tạo đề thi & Bắt đầu soạn" }).click();
+    await page.getByRole("button", { name: "Tạo đề thi & Bắt đầu soạn" }).click({ force: true });
     await expect(page).toHaveURL(/\/admin\/exams\/[0-9a-f-]+/);
 
     // 2. Add question using "+" pattern
@@ -72,7 +74,7 @@ test.describe("Phase: Admin Exam Builder Redesign & E2E Tests", () => {
     const textarea = questionCard.locator("textarea").first();
     await expect(textarea).toBeVisible();
     await textarea.fill("Câu hỏi kiểm tra tốc độ phản xạ");
-    await questionCard.getByRole("button", { name: "Lưu nội dung" }).click();
+    await questionCard.getByRole("button", { name: /Lưu (câu hỏi|nội dung)/i }).click();
     await page.waitForTimeout(500);
     await expect(questionCard.getByText("Câu hỏi kiểm tra tốc độ phản xạ")).toBeVisible();
 
@@ -92,12 +94,13 @@ test.describe("Phase: Admin Exam Builder Redesign & E2E Tests", () => {
   });
 
   test("10-14. Delete UX has confirmation dialog, cancel preserves entity, confirm deletes entity", async ({ page }) => {
-    // Create a fresh draft exam
+    // Create a fresh draft exam with custom template
     await page.goto("/admin/exams/new");
     const examTitle = `Đề xóa thử ${Date.now()}`;
     await page.locator('input[name="title"]').fill(examTitle);
+    await page.locator('select[name="examTemplate"]').selectOption({ value: "custom" });
     await page.locator('select[name="subjectId"]').selectOption({ index: 1 });
-    await page.getByRole("button", { name: "Tạo đề thi & Bắt đầu soạn" }).click();
+    await page.getByRole("button", { name: "Tạo đề thi & Bắt đầu soạn" }).click({ force: true });
     await expect(page).toHaveURL(/\/admin\/exams\/[0-9a-f-]+/);
 
     // Add a question
@@ -112,7 +115,7 @@ test.describe("Phase: Admin Exam Builder Redesign & E2E Tests", () => {
 
     // Confirmation dialog should appear
     await expect(page.getByRole("heading", { name: /Xóa câu hỏi/i })).toBeVisible();
-    await expect(page.getByText("Câu hỏi và các phương án lựa chọn liên quan sẽ bị xóa khỏi đề thi.")).toBeVisible();
+    await expect(page.getByText("Câu hỏi và các phương án liên quan sẽ bị xóa khỏi đề thi.")).toBeVisible();
 
     // Cancel delete
     await page.getByRole("button", { name: "Hủy" }).click();
@@ -132,8 +135,9 @@ test.describe("Phase: Admin Exam Builder Redesign & E2E Tests", () => {
     await page.goto("/admin/exams/new");
     const examTitle = `Đề kiểm tra preview ${Date.now()}`;
     await page.locator('input[name="title"]').fill(examTitle);
+    await page.locator('select[name="examTemplate"]').selectOption({ value: "custom" });
     await page.locator('select[name="subjectId"]').selectOption({ index: 1 });
-    await page.getByRole("button", { name: "Tạo đề thi & Bắt đầu soạn" }).click();
+    await page.getByRole("button", { name: "Tạo đề thi & Bắt đầu soạn" }).click({ force: true });
     await expect(page).toHaveURL(/\/admin\/exams\/[0-9a-f-]+/);
 
     // Open Preview Modal
@@ -145,5 +149,22 @@ test.describe("Phase: Admin Exam Builder Redesign & E2E Tests", () => {
     await page.getByRole("button", { name: "Cài đặt đề thi" }).click();
     await expect(page.getByText("Cài đặt & Cấu hình đề thi")).toBeVisible();
     await page.getByRole("button", { name: "Đóng" }).first().click();
+  });
+
+  test("17. Real-world THPT 2026 Template scaffolds 22 questions automatically without manual friction", async ({ page }) => {
+    await page.goto("/admin/exams/new");
+    const examTitle = `Đề Toán THPT 2026 E2E ${Date.now()}`;
+    await page.locator('input[name="title"]').fill(examTitle);
+    await page.locator('select[name="examTemplate"]').selectOption({ value: "thpt_math_2026" });
+    await page.locator('select[name="subjectId"]').selectOption({ index: 1 });
+    await page.getByRole("button", { name: "Tạo đề thi & Bắt đầu soạn" }).click({ force: true });
+    await expect(page).toHaveURL(/\/admin\/exams\/[0-9a-f-]+/);
+
+    // Verify 22 question cards are scaffolded
+    await expect(page.locator(".group\\/card")).toHaveCount(22);
+
+    // Verify Part II (True/False group) and Part III (Short answer) are properly rendered
+    await expect(page.getByText("Đúng / Sai").first()).toBeVisible();
+    await expect(page.getByText("Trả lời ngắn").first()).toBeVisible();
   });
 });

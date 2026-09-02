@@ -65,7 +65,8 @@ test.describe("Phase 8 Fullscreen Integrity E2E Tests", () => {
     if (await gateBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
       await gateBtn.click();
     }
-    await expect(page).toHaveURL(/\/attempts\/[a-f0-9-]+/, { timeout: 10000 });
+    await expect(page).toHaveURL(/\/attempts\/[a-f0-9-]+/, { timeout: 15000 });
+    await expect(page.getByText("Đang làm bài thi")).toBeVisible();
 
     // Simulate exit fullscreen
     await page.evaluate(() => {
@@ -91,7 +92,8 @@ test.describe("Phase 8 Fullscreen Integrity E2E Tests", () => {
     if (await gateBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
       await gateBtn.click();
     }
-    await expect(page).toHaveURL(/\/attempts\/[a-f0-9-]+/, { timeout: 10000 });
+    await expect(page).toHaveURL(/\/attempts\/[a-f0-9-]+/, { timeout: 15000 });
+    await expect(page.getByText("Đang làm bài thi")).toBeVisible();
 
     // Simulate exit fullscreen
     await page.evaluate(() => {

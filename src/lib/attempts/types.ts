@@ -53,8 +53,13 @@ export interface QuestionAnswerDetail {
   explanation: string | null;
   score: number;
   position: number;
+  questionType: string;
+  correctAnswerRaw: string | null;
+  tolerance?: number | null;
   selectedOptionId: string | null;
   selectedOptionContent: string | null;
+  textAnswer: string | null;
+  subAnswers: Record<string, boolean> | null;
   correctOptionId: string | null;
   correctOptionContent: string | null;
   isCorrect: boolean;

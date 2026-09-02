@@ -4,6 +4,7 @@ import Link from "next/link";
 import { CheckCircle2, HelpCircle, XCircle, Trophy, ArrowLeft, BookOpen, Clock, Calendar, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { evaluateMathAnswer } from "@/lib/exams/math-parser";
 import type { StudentAttemptResult } from "@/lib/exams/attempts";
 
 interface ExamResultUIProps {
@@ -219,14 +220,40 @@ export function ExamResultUI({ result }: ExamResultUIProps) {
         </Card>
       )}
 
-      {/* Question Details & Review (Only when show_answers_after_submit is true) */}
+      {/* Question Details & Review */}
       {result.show_answers_after_submit && result.questions_detail && result.questions_detail.length > 0 && (
         <div className="space-y-4 pt-4">
           <h2 className="text-xl font-bold text-[var(--foreground)]">Chi tiết bài làm</h2>
 
           {result.questions_detail.map((q, idx) => {
-            const isUserCorrect = q.selected_option_id === q.correct_option_id && Boolean(q.selected_option_id);
-            const isUserBlank = !q.selected_option_id;
+            const qType = q.question_type || "multiple_choice";
+            const isTf = qType === "true_false_group";
+            const isShort = qType === "short_answer";
+
+            // MCQ Status
+            const isMcqCorrect = q.is_correct !== undefined && q.is_correct !== null
+              ? Boolean(q.is_correct)
+              : (q.selected_option_id === q.correct_option_id && Boolean(q.selected_option_id));
+            const isMcqBlank = !q.selected_option_id;
+
+            // Short Answer Status
+            const isShortCorrect = q.is_correct !== undefined && q.is_correct !== null
+              ? Boolean(q.is_correct)
+              : evaluateMathAnswer(q.text_answer, q.correct_answer_raw, q.tolerance ?? 0);
+            const isShortBlank = !q.text_answer || q.text_answer.trim().length === 0;
+
+            // True / False Status
+            const subAnswers = q.sub_answers || {};
+            let tfCorrectCount = 0;
+            if (isTf) {
+              q.options.forEach((opt) => {
+                if (subAnswers[opt.id] !== undefined && subAnswers[opt.id] === opt.is_correct) {
+                  tfCorrectCount += 1;
+                }
+              });
+            }
+            const isTfFullCorrect = isTf && q.options.length > 0 && tfCorrectCount === q.options.length;
+            const isTfBlank = isTf && Object.keys(subAnswers).length === 0;
 
             return (
               <Card key={q.question_id} className="border-[var(--border)] bg-[var(--card)] rounded-2xl shadow-md">
@@ -235,22 +262,59 @@ export function ExamResultUI({ result }: ExamResultUIProps) {
                     <CardTitle className="text-base font-bold flex items-center gap-2 text-[var(--foreground)]">
                       <span>Câu {idx + 1}</span>
                       <span className="text-xs text-[var(--muted-foreground)] font-normal">({q.score} điểm)</span>
+                      <span className="text-xs font-semibold px-2 py-0.5 rounded-md bg-[var(--surface-hover)] border border-[var(--border)] text-[var(--foreground)]">
+                        {isTf ? "Đúng / Sai" : isShort ? "Trả lời ngắn" : "Trắc nghiệm"}
+                      </span>
                     </CardTitle>
 
                     {result.show_score_after_submit && (
                       <div>
-                        {isUserCorrect ? (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 dark:text-emerald-400">
-                            <CheckCircle2 className="h-3.5 w-3.5" /> Đúng
-                          </span>
-                        ) : isUserBlank ? (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-[var(--surface-hover)] border border-[var(--border)] px-2.5 py-0.5 text-xs font-semibold text-[var(--muted-foreground)]">
-                            <HelpCircle className="h-3.5 w-3.5" /> Chưa làm
-                          </span>
+                        {isTf ? (
+                          isTfFullCorrect ? (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 dark:text-emerald-400">
+                              <CheckCircle2 className="h-3.5 w-3.5" /> Đúng ({tfCorrectCount}/{q.options.length} ý)
+                            </span>
+                          ) : tfCorrectCount > 0 ? (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 border border-amber-500/20 px-2.5 py-0.5 text-xs font-semibold text-amber-700 dark:text-amber-400">
+                              <CheckCircle2 className="h-3.5 w-3.5" /> Đúng một phần ({tfCorrectCount}/{q.options.length} ý)
+                            </span>
+                          ) : isTfBlank ? (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-[var(--surface-hover)] border border-[var(--border)] px-2.5 py-0.5 text-xs font-semibold text-[var(--muted-foreground)]">
+                              <HelpCircle className="h-3.5 w-3.5" /> Chưa làm
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-rose-500/10 border border-rose-500/20 px-2.5 py-0.5 text-xs font-semibold text-rose-700 dark:text-rose-400">
+                              <XCircle className="h-3.5 w-3.5" /> Sai (0/{q.options.length} ý)
+                            </span>
+                          )
+                        ) : isShort ? (
+                          isShortCorrect ? (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 dark:text-emerald-400">
+                              <CheckCircle2 className="h-3.5 w-3.5" /> Đúng
+                            </span>
+                          ) : isShortBlank ? (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-[var(--surface-hover)] border border-[var(--border)] px-2.5 py-0.5 text-xs font-semibold text-[var(--muted-foreground)]">
+                              <HelpCircle className="h-3.5 w-3.5" /> Chưa làm
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-rose-500/10 border border-rose-500/20 px-2.5 py-0.5 text-xs font-semibold text-rose-700 dark:text-rose-400">
+                              <XCircle className="h-3.5 w-3.5" /> Sai
+                            </span>
+                          )
                         ) : (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-rose-500/10 border border-rose-500/20 px-2.5 py-0.5 text-xs font-semibold text-rose-700 dark:text-rose-400">
-                            <XCircle className="h-3.5 w-3.5" /> Sai
-                          </span>
+                          isMcqCorrect ? (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 dark:text-emerald-400">
+                              <CheckCircle2 className="h-3.5 w-3.5" /> Đúng
+                            </span>
+                          ) : isMcqBlank ? (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-[var(--surface-hover)] border border-[var(--border)] px-2.5 py-0.5 text-xs font-semibold text-[var(--muted-foreground)]">
+                              <HelpCircle className="h-3.5 w-3.5" /> Chưa làm
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-rose-500/10 border border-rose-500/20 px-2.5 py-0.5 text-xs font-semibold text-rose-700 dark:text-rose-400">
+                              <XCircle className="h-3.5 w-3.5" /> Sai
+                            </span>
+                          )
                         )}
                       </div>
                     )}
@@ -262,7 +326,6 @@ export function ExamResultUI({ result }: ExamResultUIProps) {
 
                   {q.image_path && (
                     <div className="my-2 overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--card-secondary)] p-2">
-                      {/* eslint-disable-next-html-element-suppression */}
                       <img
                         src={q.image_path}
                         alt={`Hình minh họa câu ${idx + 1}`}
@@ -271,53 +334,139 @@ export function ExamResultUI({ result }: ExamResultUIProps) {
                     </div>
                   )}
 
-                  <div className="space-y-2">
-                    {q.options.map((opt, optIdx) => {
-                      const letter = String.fromCharCode(65 + optIdx);
-                      const isSelected = q.selected_option_id === opt.id;
-                      const isCorrect = q.correct_option_id === opt.id;
+                  {/* Mode 1: Multiple Choice Options Result */}
+                  {!isTf && !isShort && (
+                    <div className="space-y-2">
+                      {q.options.map((opt, optIdx) => {
+                        const letter = String.fromCharCode(65 + optIdx);
+                        const isSelected = q.selected_option_id === opt.id;
+                        const isCorrect = q.correct_option_id === opt.id;
 
-                      let optionBorder = "border-[var(--border)] bg-[var(--surface)] text-[var(--foreground)]";
-                      if (isCorrect) {
-                        optionBorder = "border-emerald-500 bg-emerald-500/15 text-[var(--foreground)] font-semibold shadow-xs";
-                      } else if (isSelected && !isCorrect) {
-                        optionBorder = "border-rose-500 bg-rose-500/15 text-[var(--foreground)] font-semibold shadow-xs";
-                      }
+                        let optionBorder = "border-[var(--border)] bg-[var(--surface)] text-[var(--foreground)]";
+                        if (isCorrect) {
+                          optionBorder = "border-emerald-500 bg-emerald-500/15 text-[var(--foreground)] font-semibold shadow-xs";
+                        } else if (isSelected && !isCorrect) {
+                          optionBorder = "border-rose-500 bg-rose-500/15 text-[var(--foreground)] font-semibold shadow-xs";
+                        }
 
-                      return (
-                        <div
-                          key={opt.id}
-                          className={`flex items-center justify-between p-3 rounded-xl border text-xs sm:text-sm ${optionBorder}`}
-                        >
-                          <div className="flex items-center gap-3">
-                            <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-lg text-xs font-bold ${
-                              isCorrect
-                                ? "bg-emerald-600 text-white"
-                                : isSelected
-                                ? "bg-rose-600 text-white"
-                                : "bg-[var(--surface-hover)] text-[var(--foreground)] border border-[var(--border)]"
-                            }`}>
-                              {letter}
-                            </span>
-                            <span>{opt.content}</span>
-                          </div>
-
-                          <div className="flex items-center gap-2">
-                            {isSelected && (
-                              <span className="text-[11px] font-semibold text-[var(--muted-foreground)] bg-[var(--surface-hover)] px-2 py-0.5 rounded-md border border-[var(--border)]">
-                                Bạn chọn
+                        return (
+                          <div
+                            key={opt.id}
+                            className={`flex items-center justify-between p-3 rounded-xl border text-xs sm:text-sm ${optionBorder}`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-lg text-xs font-bold ${
+                                isCorrect
+                                  ? "bg-emerald-600 text-white"
+                                  : isSelected
+                                  ? "bg-rose-600 text-white"
+                                  : "bg-[var(--surface-hover)] text-[var(--foreground)] border border-[var(--border)]"
+                              }`}>
+                                {letter}
                               </span>
-                            )}
-                            {isCorrect && (
-                              <span className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-500/20 px-2 py-0.5 rounded-md border border-emerald-500/30">
-                                Đáp án đúng
+                              <span>{opt.content}</span>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              {isSelected && (
+                                <span className="text-[11px] font-semibold text-[var(--muted-foreground)] bg-[var(--surface-hover)] px-2 py-0.5 rounded-md border border-[var(--border)]">
+                                  Bạn chọn
+                                </span>
+                              )}
+                              {isCorrect && (
+                                <span className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-500/20 px-2 py-0.5 rounded-md border border-emerald-500/30">
+                                  Đáp án đúng
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Mode 2: True/False Group Result */}
+                  {isTf && (
+                    <div className="space-y-2.5">
+                      {q.options.map((opt, optIdx) => {
+                        const letter = ["a", "b", "c", "d", "e"][optIdx] || `${optIdx + 1}`;
+                        const studentVal = subAnswers[opt.id];
+                        const isStatementCorrect = opt.is_correct;
+                        const isMatch = studentVal !== undefined && studentVal === isStatementCorrect;
+
+                        return (
+                          <div
+                            key={opt.id}
+                            className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-xl border text-xs sm:text-sm ${
+                              isMatch
+                                ? "border-emerald-500/30 bg-emerald-500/5"
+                                : studentVal !== undefined
+                                ? "border-rose-500/30 bg-rose-500/5"
+                                : "border-[var(--border)] bg-[var(--surface)]"
+                            }`}
+                          >
+                            <div className="flex items-start gap-2.5 flex-1 min-w-0">
+                              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--surface-hover)] text-[11px] font-bold">
+                                {letter}
+                              </span>
+                              <span className="text-[var(--foreground)]">{opt.content}</span>
+                            </div>
+
+                            <div className="flex items-center gap-3 shrink-0 self-end sm:self-center">
+                              <div className="text-xs">
+                                <span className="text-[var(--muted-foreground)] mr-1.5">Bạn chọn:</span>
+                                {studentVal === true ? (
+                                  <span className="font-bold text-emerald-600 dark:text-emerald-400">Đúng</span>
+                                ) : studentVal === false ? (
+                                  <span className="font-bold text-rose-600 dark:text-rose-400">Sai</span>
+                                ) : (
+                                  <span className="italic text-[var(--muted-foreground)]">Chưa chọn</span>
+                                )}
+                              </div>
+
+                              <div className="text-xs border-l border-[var(--divider)] pl-3">
+                                <span className="text-[var(--muted-foreground)] mr-1.5">Đáp án:</span>
+                                <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                                  {isStatementCorrect ? "Đúng" : "Sai"}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Mode 3: Short Answer Result */}
+                  {isShort && (
+                    <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 space-y-3">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <span className="text-xs text-[var(--muted-foreground)] block">Câu trả lời của bạn:</span>
+                          <span className={`text-base font-bold font-mono ${isShortCorrect ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>
+                            {q.text_answer || <span className="italic font-normal font-sans text-xs text-[var(--muted-foreground)]">Chưa trả lời</span>}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-xs text-[var(--muted-foreground)] block">Đáp án chuẩn:</span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-base font-bold font-mono text-emerald-600 dark:text-emerald-400">
+                              {q.correct_answer_raw || "—"}
+                            </span>
+                            {q.tolerance !== undefined && q.tolerance !== null && q.tolerance > 0 ? (
+                              <span className="text-xs font-mono font-medium text-blue-700 dark:text-blue-300 bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20">
+                                (Sai số: ± {q.tolerance})
+                              </span>
+                            ) : (
+                              <span className="text-xs font-medium text-[var(--muted-foreground)] bg-[var(--surface-hover)] px-2 py-0.5 rounded border border-[var(--border)]">
+                                (Sai số: Không cho phép)
                               </span>
                             )}
                           </div>
                         </div>
-                      );
-                    })}
-                  </div>
+                      </div>
+                    </div>
+                  )}
 
                   {result.show_solutions_after_submit && q.explanation && (
                     <div className="rounded-xl border border-blue-500/20 bg-blue-500/10 p-3.5 text-xs sm:text-sm text-blue-900 dark:text-blue-200 space-y-1">

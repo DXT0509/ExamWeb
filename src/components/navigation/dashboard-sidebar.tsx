@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -13,12 +14,15 @@ import {
   Home,
   LayoutDashboard,
   LogOut,
+  MessageSquare,
   Shield,
   Users,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useSidebar } from "@/components/navigation/sidebar-provider";
 import { logoutAction } from "@/lib/actions/auth";
+import { getAdminUnreadConversationCountAction } from "@/lib/chat/actions";
+import { createClient } from "@/lib/supabase/client";
 import type { UserProfile } from "@/lib/auth/session";
 
 interface DashboardSidebarProps {
@@ -29,6 +33,7 @@ interface DashboardSidebarProps {
 export function DashboardSidebar({ user, onItemClick }: DashboardSidebarProps) {
   const pathname = usePathname();
   const { isCollapsed, toggleSidebar } = useSidebar();
+  const [adminUnreadCount, setAdminUnreadCount] = useState(0);
 
   const isActive = (href: string) => {
     if (href === "/") return pathname === "/";
@@ -49,13 +54,50 @@ export function DashboardSidebar({ user, onItemClick }: DashboardSidebarProps) {
   const isStudent = user && user.role !== "admin";
   const isAdmin = user?.role === "admin";
 
+  // Fetch and subscribe to unread conversation count for admin
+  useEffect(() => {
+    if (!isAdmin) return;
+
+    let isMounted = true;
+    const fetchUnread = async () => {
+      const res = await getAdminUnreadConversationCountAction();
+      if (!isMounted) return;
+      if (res.data !== undefined) {
+        setAdminUnreadCount(res.data);
+      }
+    };
+
+    fetchUnread();
+
+    const supabase = createClient();
+    const channel = supabase
+      .channel("admin-sidebar-unread-count")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "conversations",
+        },
+        () => {
+          fetchUnread();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      isMounted = false;
+      supabase.removeChannel(channel);
+    };
+  }, [isAdmin, pathname]);
+
   return (
     <aside
       className={`relative flex h-full w-full flex-col justify-between border-r border-[var(--border)] bg-[var(--surface)] text-[var(--foreground)] select-none transition-all duration-300 ${
         isCollapsed ? "p-2.5" : "p-4"
       }`}
     >
-      {/* Center Edge Collapse/Expand Handle (Thanh dài ở chính giữa cạnh phải, nằm gọn bên trong menu) */}
+      {/* Center Edge Collapse/Expand Handle */}
       <button
         type="button"
         onClick={toggleSidebar}
@@ -63,7 +105,6 @@ export function DashboardSidebar({ user, onItemClick }: DashboardSidebarProps) {
         aria-label={isCollapsed ? "Mở rộng menu" : "Thu hẹp menu"}
         className="hidden md:flex absolute top-1/2 -translate-y-1/2 right-0 z-30 h-14 w-3.5 items-center justify-center rounded-l-md border border-r-0 border-[var(--border)] bg-[var(--card)] hover:bg-[var(--surface-hover)] shadow-xs transition-all duration-200 cursor-pointer group active:scale-95"
       >
-        {/* Center Triangle Indicator */}
         <svg
           viewBox="0 0 6 10"
           fill="currentColor"
@@ -207,6 +248,34 @@ export function DashboardSidebar({ user, onItemClick }: DashboardSidebarProps) {
                 <LayoutDashboard className="h-4 w-4 shrink-0" />
                 {!isCollapsed && <span className="truncate">Dashboard tổng quan</span>}
               </Link>
+
+              {/* Mục Tin nhắn hỗ trợ trực tuyến với badge số lượng chưa phản hồi */}
+              <Link
+                href="/admin/messages"
+                onClick={onItemClick}
+                title="Tin nhắn hỗ trợ"
+                className={linkClass("/admin/messages")}
+              >
+                <div className="relative flex items-center justify-center shrink-0">
+                  <MessageSquare className="h-4 w-4" />
+                  {isCollapsed && adminUnreadCount > 0 && (
+                    <span className="absolute -top-1.5 -right-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-extrabold text-white ring-2 ring-[var(--surface)] animate-pulse">
+                      {adminUnreadCount}
+                    </span>
+                  )}
+                </div>
+                {!isCollapsed && (
+                  <div className="flex flex-1 items-center justify-between min-w-0">
+                    <span className="truncate">Tin nhắn hỗ trợ</span>
+                    {adminUnreadCount > 0 && (
+                      <span className="ml-2 flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-rose-500 px-1.5 text-[10px] font-extrabold text-white shadow-xs animate-pulse">
+                        {adminUnreadCount}
+                      </span>
+                    )}
+                  </div>
+                )}
+              </Link>
+
               <Link
                 href="/admin/exams"
                 onClick={onItemClick}
@@ -291,7 +360,7 @@ export function DashboardSidebar({ user, onItemClick }: DashboardSidebarProps) {
                   type="submit"
                   variant="ghost"
                   size="icon"
-                  className="h-7 w-7 text-[var(--muted-foreground)] hover:text-[var(--destructive)] hover:bg-[var(--surface-hover)]"
+                  className="h-7 w-7 text-[var(--muted-foreground)] hover:text-[var(--destructive)] hover:bg-[var(--surface-hover)] cursor-pointer"
                   title="Đăng xuất"
                 >
                   <LogOut className="h-3.5 w-3.5" />
@@ -304,7 +373,7 @@ export function DashboardSidebar({ user, onItemClick }: DashboardSidebarProps) {
                 href="/profile"
                 onClick={onItemClick}
                 title={`Hồ sơ: ${user.display_name || user.displayName || user.email}`}
-                className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--primary)] text-white text-xs font-bold shadow-xs hover:ring-2 hover:ring-[var(--primary)]/40 transition-all"
+                className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--primary)] text-white text-xs font-bold shadow-xs hover:ring-2 hover:ring-[var(--primary)]/40 transition-all cursor-pointer"
               >
                 {(user.display_name || user.displayName || "U")[0]?.toUpperCase() || "U"}
               </Link>
@@ -313,7 +382,7 @@ export function DashboardSidebar({ user, onItemClick }: DashboardSidebarProps) {
                   type="submit"
                   variant="ghost"
                   size="icon"
-                  className="h-7 w-7 text-[var(--muted-foreground)] hover:text-[var(--destructive)] hover:bg-[var(--surface-hover)]"
+                  className="h-7 w-7 text-[var(--muted-foreground)] hover:text-[var(--destructive)] hover:bg-[var(--surface-hover)] cursor-pointer"
                   title="Đăng xuất"
                 >
                   <LogOut className="h-3.5 w-3.5" />
@@ -326,7 +395,7 @@ export function DashboardSidebar({ user, onItemClick }: DashboardSidebarProps) {
             <div className="space-y-2">
               <Button
                 asChild
-                className="w-full bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white font-semibold rounded-xl text-xs h-9 shadow-md shadow-blue-600/20"
+                className="w-full bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white font-semibold rounded-xl text-xs h-9 shadow-md shadow-blue-600/20 cursor-pointer"
               >
                 <Link href="/login" onClick={onItemClick}>
                   Đăng nhập tài khoản
@@ -341,7 +410,7 @@ export function DashboardSidebar({ user, onItemClick }: DashboardSidebarProps) {
               <Button
                 asChild
                 size="icon"
-                className="h-8 w-8 rounded-xl bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white shadow-xs"
+                className="h-8 w-8 rounded-xl bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white shadow-xs cursor-pointer"
                 title="Đăng nhập tài khoản"
               >
                 <Link href="/login" onClick={onItemClick}>

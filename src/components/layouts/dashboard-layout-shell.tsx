@@ -54,8 +54,8 @@ export function DashboardLayoutShell({
         </main>
       </div>
 
-      {/* Floating Chat Support Widget */}
-      <FloatingSupport />
+      {/* Floating Chat Support Widget - Only for students/guests, hidden for admin */}
+      {user?.role !== "admin" && <FloatingSupport userRole={user?.role} />}
     </div>
   );
 }

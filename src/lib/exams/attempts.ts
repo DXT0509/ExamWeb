@@ -2,6 +2,7 @@
 import { isRedirectError } from "next/dist/client/components/redirect-error";
 import { createClient } from "@/lib/supabase/server";
 import { ensureGuestSessionToken, getGuestSessionHash } from "@/lib/exams/guest-session";
+import { evaluateMathAnswer } from "@/lib/exams/math-parser";
 import { saveAnswerSchema, startAttemptSchema, submitAttemptSchema } from "@/lib/validations/attempt";
 import type { Json } from "@/types/database";
 
@@ -18,6 +19,8 @@ export type StudentExamQuestion = {
   image_path: string | null;
   score: number;
   position: number;
+  question_type: string;
+  tolerance?: number | null;
   options: StudentExamOption[];
 };
 
@@ -31,7 +34,9 @@ export type StudentExamSection = {
 
 export type StudentAttemptAnswer = {
   question_id: string;
-  selected_option_id: string | null;
+  selected_option_id?: string | null;
+  text_answer?: string | null;
+  sub_answers?: Record<string, boolean> | null;
   is_marked: boolean;
   answered_at: string;
 };
@@ -44,6 +49,8 @@ export type StudentAttemptPayload = {
   duration_minutes: number;
   total_score: number;
   fullscreen_required: boolean;
+  exam_template?: string;
+  scoring_strategy?: string;
   status: "in_progress" | "submitted" | "auto_submitted" | "expired";
   started_at: string;
   deadline_at: string;
@@ -60,8 +67,14 @@ export type QuestionResultDetail = {
   explanation: string | null;
   score: number;
   position: number;
+  question_type: string;
+  correct_answer_raw?: string | null;
+  tolerance?: number | null;
   selected_option_id: string | null;
+  text_answer?: string | null;
+  sub_answers?: Record<string, boolean> | null;
   correct_option_id: string | null;
+  is_correct?: boolean | null;
   options: StudentExamOption[];
 };
 
@@ -198,9 +211,33 @@ export async function getAttemptPayloadAction(attemptId: string): Promise<
       return { success: false, error: mapErrorMessage(error.message, "Không thể tải bài thi. Vui lòng thử lại.") };
     }
 
+    const payload = data as unknown as StudentAttemptPayload;
+
+    // Robust enrichment: If any question is missing tolerance, enrich from questions table
+    if (payload.sections && payload.sections.length > 0) {
+      const qIds = payload.sections.flatMap((s) => (s.questions || []).map((q) => q.id));
+      if (qIds.length > 0) {
+        const { data: dbQuestions } = await supabase
+          .from("questions")
+          .select("id, tolerance")
+          .in("id", qIds);
+
+        if (dbQuestions && dbQuestions.length > 0) {
+          const tolMap = new Map(dbQuestions.map((q) => [q.id, q.tolerance]));
+          payload.sections = payload.sections.map((s) => ({
+            ...s,
+            questions: (s.questions || []).map((q) => ({
+              ...q,
+              tolerance: q.tolerance !== undefined && q.tolerance !== null ? q.tolerance : (tolMap.get(q.id) ?? 0),
+            })),
+          }));
+        }
+      }
+    }
+
     return {
       success: true,
-      payload: data as unknown as StudentAttemptPayload,
+      payload,
     };
   } catch (err: unknown) {
     if (isRedirectError(err)) throw err;
@@ -216,6 +253,8 @@ export async function saveAnswerAction(input: {
   attemptId: string;
   questionId: string;
   selectedOptionId?: string | null;
+  textAnswer?: string | null;
+  subAnswers?: Record<string, boolean> | null;
   isMarked?: boolean;
 }): Promise<{ success: true } | { success: false; error: string }> {
   try {
@@ -233,6 +272,8 @@ export async function saveAnswerAction(input: {
       p_selected_option_id: parse.data.selectedOptionId ?? undefined,
       p_is_marked: parse.data.isMarked ?? false,
       p_guest_session_hash: guestHash ?? undefined,
+      p_text_answer: parse.data.textAnswer ?? undefined,
+      p_sub_answers: (parse.data.subAnswers as unknown as Json) ?? undefined,
     });
 
     if (error) {
@@ -409,9 +450,44 @@ export async function getAttemptResultAction(attemptId: string): Promise<
       return { success: false, error: mapErrorMessage(error.message, "Không thể tải kết quả bài thi.") };
     }
 
+    const result = data as unknown as StudentAttemptResult;
+
+    // Robust enrichment: ensure tolerance, correct_answer_raw, and is_correct are always populated
+    if (result.questions_detail && result.questions_detail.length > 0) {
+      const qIds = result.questions_detail.map((q) => q.question_id);
+      const { data: dbQuestions } = await supabase
+        .from("questions")
+        .select("id, tolerance, correct_answer_raw")
+        .in("id", qIds);
+
+      const dbMap = new Map((dbQuestions || []).map((q) => [q.id, q]));
+
+      result.questions_detail = result.questions_detail.map((q) => {
+        const dbQ = dbMap.get(q.question_id);
+        const resolvedTolerance = q.tolerance !== undefined && q.tolerance !== null ? q.tolerance : (dbQ?.tolerance ?? 0);
+        const resolvedRawAnswer = q.correct_answer_raw || dbQ?.correct_answer_raw || null;
+
+        let computedIsCorrect = q.is_correct;
+        if (computedIsCorrect === undefined || computedIsCorrect === null) {
+          if (q.question_type === "short_answer") {
+            computedIsCorrect = evaluateMathAnswer(q.text_answer, resolvedRawAnswer, resolvedTolerance);
+          } else if (q.question_type === "multiple_choice" || q.question_type === "regular") {
+            computedIsCorrect = Boolean(q.selected_option_id && q.correct_option_id && q.selected_option_id === q.correct_option_id);
+          }
+        }
+
+        return {
+          ...q,
+          tolerance: resolvedTolerance,
+          correct_answer_raw: resolvedRawAnswer,
+          is_correct: computedIsCorrect,
+        };
+      });
+    }
+
     return {
       success: true,
-      result: data as unknown as StudentAttemptResult,
+      result,
     };
   } catch (err: unknown) {
     if (isRedirectError(err)) throw err;

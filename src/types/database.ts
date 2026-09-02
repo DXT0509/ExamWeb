@@ -43,6 +43,8 @@ export type Database = {
           is_marked: boolean
           question_id: string
           selected_option_id: string | null
+          sub_answers: Json | null
+          text_answer: string | null
           updated_at: string
         }
         Insert: {
@@ -53,6 +55,8 @@ export type Database = {
           is_marked?: boolean
           question_id: string
           selected_option_id?: string | null
+          sub_answers?: Json | null
+          text_answer?: string | null
           updated_at?: string
         }
         Update: {
@@ -63,6 +67,8 @@ export type Database = {
           is_marked?: boolean
           question_id?: string
           selected_option_id?: string | null
+          sub_answers?: Json | null
+          text_answer?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -92,6 +98,47 @@ export type Database = {
             columns: ["selected_option_id"]
             isOneToOne: false
             referencedRelation: "question_options"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      conversations: {
+        Row: {
+          admin_unread_count: number
+          created_at: string
+          id: string
+          last_message_at: string
+          status: Database["public"]["Enums"]["conversation_status"]
+          student_id: string
+          student_unread_count: number
+          updated_at: string
+        }
+        Insert: {
+          admin_unread_count?: number
+          created_at?: string
+          id?: string
+          last_message_at?: string
+          status?: Database["public"]["Enums"]["conversation_status"]
+          student_id: string
+          student_unread_count?: number
+          updated_at?: string
+        }
+        Update: {
+          admin_unread_count?: number
+          created_at?: string
+          id?: string
+          last_message_at?: string
+          status?: Database["public"]["Enums"]["conversation_status"]
+          student_id?: string
+          student_unread_count?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversations_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -396,11 +443,13 @@ export type Database = {
           deleted_at: string | null
           description: string | null
           duration_minutes: number
+          exam_template: string
           fullscreen_required: boolean
           id: string
           published_at: string | null
           randomize_options: boolean
           randomize_questions: boolean
+          scoring_strategy: string
           show_answers_after_submit: boolean
           show_score_after_submit: boolean
           show_solutions_after_submit: boolean
@@ -423,11 +472,13 @@ export type Database = {
           deleted_at?: string | null
           description?: string | null
           duration_minutes: number
+          exam_template?: string
           fullscreen_required?: boolean
           id?: string
           published_at?: string | null
           randomize_options?: boolean
           randomize_questions?: boolean
+          scoring_strategy?: string
           show_answers_after_submit?: boolean
           show_score_after_submit?: boolean
           show_solutions_after_submit?: boolean
@@ -450,11 +501,13 @@ export type Database = {
           deleted_at?: string | null
           description?: string | null
           duration_minutes?: number
+          exam_template?: string
           fullscreen_required?: boolean
           id?: string
           published_at?: string | null
           randomize_options?: boolean
           randomize_questions?: boolean
+          scoring_strategy?: string
           show_answers_after_submit?: boolean
           show_score_after_submit?: boolean
           show_solutions_after_submit?: boolean
@@ -491,6 +544,51 @@ export type Database = {
           {
             foreignKeyName: "exams_updated_by_fkey"
             columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      messages: {
+        Row: {
+          client_msg_id: string | null
+          content: string
+          conversation_id: string
+          created_at: string
+          id: string
+          sender_id: string
+          sender_role: Database["public"]["Enums"]["profile_role"]
+        }
+        Insert: {
+          client_msg_id?: string | null
+          content: string
+          conversation_id: string
+          created_at?: string
+          id?: string
+          sender_id: string
+          sender_role: Database["public"]["Enums"]["profile_role"]
+        }
+        Update: {
+          client_msg_id?: string | null
+          content?: string
+          conversation_id?: string
+          created_at?: string
+          id?: string
+          sender_id?: string
+          sender_role?: Database["public"]["Enums"]["profile_role"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "messages_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_sender_id_fkey"
+            columns: ["sender_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -571,41 +669,53 @@ export type Database = {
       questions: {
         Row: {
           content: string
+          correct_answer_raw: string | null
           created_at: string
           deleted_at: string | null
           explanation: string | null
           id: string
           image_path: string | null
           is_active: boolean
+          metadata: Json
           position: number
+          question_type: string
           score: number
           section_id: string
+          tolerance: number | null
           updated_at: string
         }
         Insert: {
           content: string
+          correct_answer_raw?: string | null
           created_at?: string
           deleted_at?: string | null
           explanation?: string | null
           id?: string
           image_path?: string | null
           is_active?: boolean
+          metadata?: Json
           position: number
+          question_type?: string
           score?: number
           section_id: string
+          tolerance?: number | null
           updated_at?: string
         }
         Update: {
           content?: string
+          correct_answer_raw?: string | null
           created_at?: string
           deleted_at?: string | null
           explanation?: string | null
           id?: string
           image_path?: string | null
           is_active?: boolean
+          metadata?: Json
           position?: number
+          question_type?: string
           score?: number
           section_id?: string
+          tolerance?: number | null
           updated_at?: string
         }
         Relationships: [
@@ -760,11 +870,13 @@ export type Database = {
           deleted_at: string | null
           description: string | null
           duration_minutes: number
+          exam_template: string
           fullscreen_required: boolean
           id: string
           published_at: string | null
           randomize_options: boolean
           randomize_questions: boolean
+          scoring_strategy: string
           show_answers_after_submit: boolean
           show_score_after_submit: boolean
           show_solutions_after_submit: boolean
@@ -859,7 +971,28 @@ export type Database = {
         Args: { p_attempt_id: string; p_guest_session_hash?: string }
         Returns: Json
       }
+      get_or_create_student_conversation: {
+        Args: never
+        Returns: {
+          admin_unread_count: number
+          created_at: string
+          id: string
+          last_message_at: string
+          status: Database["public"]["Enums"]["conversation_status"]
+          student_id: string
+          student_unread_count: number
+          updated_at: string
+        }[]
+      }
       is_admin: { Args: never; Returns: boolean }
+      mark_conversation_read: {
+        Args: { p_conversation_id: string }
+        Returns: boolean
+      }
+      math_value_equals: {
+        Args: { p_raw1: string; p_raw2: string; p_tolerance?: number }
+        Returns: boolean
+      }
       publish_exam: {
         Args: { exam_id: string }
         Returns: {
@@ -925,10 +1058,28 @@ export type Database = {
           p_is_marked?: boolean
           p_question_id: string
           p_selected_option_id?: string
+          p_sub_answers?: Json
+          p_text_answer?: string
         }
         Returns: {
           code: string
           success: boolean
+        }[]
+      }
+      send_chat_message: {
+        Args: {
+          p_client_msg_id?: string
+          p_content: string
+          p_conversation_id: string
+        }
+        Returns: {
+          client_msg_id: string
+          content: string
+          conversation_id: string
+          created_at: string
+          id: string
+          sender_id: string
+          sender_role: Database["public"]["Enums"]["profile_role"]
         }[]
       }
       start_attempt: {
@@ -978,6 +1129,7 @@ export type Database = {
     }
     Enums: {
       attempt_status: "in_progress" | "submitted" | "auto_submitted" | "expired"
+      conversation_status: "open" | "closed" | "archived"
       document_status: "draft" | "published" | "archived"
       exam_access_type: "public" | "students_only" | "private"
       exam_event_type:
@@ -1134,6 +1286,7 @@ export const Constants = {
   public: {
     Enums: {
       attempt_status: ["in_progress", "submitted", "auto_submitted", "expired"],
+      conversation_status: ["open", "closed", "archived"],
       document_status: ["draft", "published", "archived"],
       exam_access_type: ["public", "students_only", "private"],
       exam_event_type: [

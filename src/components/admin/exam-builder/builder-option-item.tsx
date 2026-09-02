@@ -47,6 +47,11 @@ export function BuilderOptionItem({
   const inputRef = useRef<HTMLInputElement>(null);
   const letter = String.fromCharCode(65 + index); // A, B, C, D...
 
+  const isDefaultOption =
+    option.content === `Phương án ${letter}` ||
+    option.content === `Lựa chọn ${letter}` ||
+    option.content === "";
+
   useEffect(() => {
     if (autoFocus && inputRef.current) {
       inputRef.current.focus();
@@ -56,10 +61,9 @@ export function BuilderOptionItem({
 
   const handleBlur = () => {
     setIsEditing(false);
-    if (content.trim() !== option.content && content.trim().length > 0) {
-      onUpdateContent(option.id, content.trim());
-    } else {
-      setContent(option.content);
+    const trimmed = content.trim();
+    if (trimmed !== option.content && trimmed.length > 0) {
+      onUpdateContent(option.id, trimmed);
     }
   };
 
@@ -101,19 +105,26 @@ export function BuilderOptionItem({
         {readOnly ? (
           <p className="text-sm text-[var(--foreground)] break-words py-1 px-1">
             <span className="font-semibold text-[var(--muted-foreground)] mr-2">{letter}.</span>
-            {option.content}
+            {isDefaultOption ? (
+              <span className="italic text-[var(--muted-foreground)]">[Chưa nhập nội dung phương án {letter}]</span>
+            ) : (
+              option.content
+            )}
           </p>
         ) : (
           <input
             ref={inputRef}
             type="text"
-            value={content}
+            value={isDefaultOption && !isEditing ? "" : content === `Phương án ${letter}` ? "" : content}
             disabled={readOnly}
             onChange={(e) => setContent(e.target.value)}
-            onFocus={() => setIsEditing(true)}
+            onFocus={() => {
+              setIsEditing(true);
+              if (content === `Phương án ${letter}`) setContent("");
+            }}
             onBlur={handleBlur}
             onKeyDown={handleKeyDown}
-            placeholder={`Nhập nội dung lựa chọn ${letter}...`}
+            placeholder={`Phương án ${letter}...`}
             className={cn(
               "w-full bg-transparent px-2 py-1 text-sm text-[var(--foreground)] placeholder:text-[var(--muted-foreground)] transition-colors focus:outline-none",
               isEditing

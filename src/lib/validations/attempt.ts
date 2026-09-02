@@ -10,6 +10,8 @@ export const saveAnswerSchema = z.object({
   attemptId: z.string().regex(uuidRegex, { message: "Mã bài thi không hợp lệ." }),
   questionId: z.string().regex(uuidRegex, { message: "Mã câu hỏi không hợp lệ." }),
   selectedOptionId: z.string().regex(uuidRegex, { message: "Mã đáp án không hợp lệ." }).nullable().optional(),
+  textAnswer: z.string().nullable().optional(),
+  subAnswers: z.record(z.string(), z.boolean()).nullable().optional(),
   isMarked: z.boolean().default(false),
 });
 

@@ -17,8 +17,13 @@ interface QuestionDbObject {
   explanation?: string | null;
   score: number;
   position: number;
+  question_type?: string;
+  correct_answer_raw?: string | null;
+  tolerance?: number | null;
   selected_option_id?: string | null;
   selected_option_content?: string | null;
+  text_answer?: string | null;
+  sub_answers?: Record<string, boolean> | null;
   correct_option_id?: string | null;
   correct_option_content?: string | null;
   is_correct?: boolean;
@@ -136,8 +141,13 @@ export async function getAdminAttemptDetail(
     explanation: q.explanation ? String(q.explanation) : null,
     score: Number(q.score || 0),
     position: Number(q.position || 0),
+    questionType: q.question_type || "multiple_choice",
+    correctAnswerRaw: q.correct_answer_raw ? String(q.correct_answer_raw) : null,
+    tolerance: q.tolerance !== undefined && q.tolerance !== null ? Number(q.tolerance) : 0,
     selectedOptionId: q.selected_option_id ? String(q.selected_option_id) : null,
     selectedOptionContent: q.selected_option_content ? String(q.selected_option_content) : null,
+    textAnswer: q.text_answer ? String(q.text_answer) : null,
+    subAnswers: q.sub_answers ?? null,
     correctOptionId: q.correct_option_id ? String(q.correct_option_id) : null,
     correctOptionContent: q.correct_option_content ? String(q.correct_option_content) : null,
     isCorrect: Boolean(q.is_correct),

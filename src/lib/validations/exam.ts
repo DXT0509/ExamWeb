@@ -55,6 +55,8 @@ export const examDraftSchema = z
     showScoreAfterSubmit: z.boolean(),
     showAnswersAfterSubmit: z.boolean(),
     showSolutionsAfterSubmit: z.boolean(),
+    examTemplate: z.string().default("custom"),
+    scoringStrategy: z.string().default("standard"),
   })
   .transform((value) => ({
     ...value,
@@ -78,6 +80,9 @@ export const questionSchema = z.object({
   score: z.number().positive("Điểm câu hỏi phải lớn hơn 0."),
   position: z.number().int("Thứ tự câu hỏi phải là số nguyên.").min(1, "Thứ tự câu hỏi phải lớn hơn hoặc bằng 1."),
   isActive: z.boolean().optional(),
+  questionType: z.enum(["multiple_choice", "true_false_group", "short_answer", "question_group", "regular"]).default("multiple_choice"),
+  correctAnswerRaw: optionalText(200, "Đáp án chuẩn không được vượt quá 200 ký tự."),
+  tolerance: z.number().min(0, "Sai số phải lớn hơn hoặc bằng 0.").default(0),
 });
 
 export const optionSchema = z.object({
@@ -93,7 +98,7 @@ export const publishExamSchema = z.object({ examId: postgresUuidSchema("Đề th
 export const cloneExamSchema = z.object({
   sourceExamId: postgresUuidSchema("Đề thi nguồn không hợp lệ."),
   newTitle: z.string().trim().min(2, "Đề thi phải có tiêu đề.").max(200, "Tiêu đề không được vượt quá 200 ký tự."),
-  newSlug: slugSchema,
+  newSlug: slugSchema.optional(),
 });
 export const reorderSchema = z.object({
   parentId: postgresUuidSchema("Dữ liệu cha không hợp lệ."),
@@ -136,4 +141,3 @@ export type SectionInput = z.infer<typeof sectionSchema>;
 export type QuestionInput = z.infer<typeof questionSchema>;
 export type OptionInput = z.infer<typeof optionSchema>;
 export type CloneExamInput = z.infer<typeof cloneExamSchema>;
-

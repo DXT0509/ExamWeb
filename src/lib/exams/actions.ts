@@ -8,6 +8,7 @@ import { formBoolean, formIdList, formNullableString, formNumber, formString } f
 import { type ActionState, toFieldErrors } from "@/lib/admin/types";
 import { requireRole } from "@/lib/auth/require-user";
 import { getDatabaseErrorMessage, getRpcResultError } from "@/lib/exams/errors";
+import { getTemplateConfig } from "@/lib/exams/templates";
 import { createClient } from "@/lib/supabase/server";
 import {
   cloneExamSchema,
@@ -24,6 +25,9 @@ import { generateVietnameseSlug, resolveUniqueExamSlug } from "@/lib/utils/slug"
 
 function parseExamForm(formData: FormData) {
   const rawSlug = formString(formData, "slug");
+  const templateKey = formString(formData, "examTemplate") || "custom";
+  const templateConfig = getTemplateConfig(templateKey);
+
   return examDraftSchema.safeParse({
     subjectId: formString(formData, "subjectId"),
     categoryId: formNullableString(formData, "categoryId"),
@@ -33,12 +37,14 @@ function parseExamForm(formData: FormData) {
     accessType: formString(formData, "accessType"),
     allowGuestAttempt: formBoolean(formData, "allowGuestAttempt"),
     fullscreenRequired: formBoolean(formData, "fullscreenRequired"),
-    durationMinutes: formNumber(formData, "durationMinutes"),
+    durationMinutes: formNumber(formData, "durationMinutes") || templateConfig.defaultDurationMinutes,
     randomizeQuestions: false,
     randomizeOptions: false,
     showScoreAfterSubmit: formBoolean(formData, "showScoreAfterSubmit"),
     showAnswersAfterSubmit: formBoolean(formData, "showAnswersAfterSubmit"),
     showSolutionsAfterSubmit: formBoolean(formData, "showSolutionsAfterSubmit"),
+    examTemplate: templateKey,
+    scoringStrategy: templateConfig.scoringStrategy,
   });
 }
 
@@ -53,7 +59,10 @@ export async function createExamAction(_state: ActionState, formData: FormData):
     ? await resolveUniqueExamSlug(supabase, parsed.data.slug)
     : await resolveUniqueExamSlug(supabase, generateVietnameseSlug(parsed.data.title));
 
-  const { data, error } = await supabase
+  const templateConfig = getTemplateConfig(parsed.data.examTemplate);
+  const scaffoldedQuestions = templateConfig.generateQuestions();
+
+  const { data: examData, error: examError } = await supabase
     .from("exams")
     .insert({
       subject_id: parsed.data.subjectId,
@@ -71,24 +80,83 @@ export async function createExamAction(_state: ActionState, formData: FormData):
       show_score_after_submit: parsed.data.showScoreAfterSubmit,
       show_answers_after_submit: parsed.data.showAnswersAfterSubmit,
       show_solutions_after_submit: parsed.data.showSolutionsAfterSubmit,
+      exam_template: parsed.data.examTemplate,
+      scoring_strategy: parsed.data.scoringStrategy,
       created_by: userId,
       updated_by: userId,
     })
     .select("id")
     .single();
-  if (error) return { ok: false, message: getDatabaseErrorMessage(error) };
 
-  // Tự động tạo Phần thi đầu tiên cho đề thi mới
-  await supabase
+  if (examError) return { ok: false, message: getDatabaseErrorMessage(examError) };
+
+  // Tạo Section chính trong suốt lưu trữ
+  const { data: secData, error: secError } = await supabase
     .from("exam_sections")
     .insert({
-      exam_id: data.id,
-      title: "Phần 1: Trắc nghiệm",
-      description: "Các câu hỏi kiểm tra kiến thức.",
+      exam_id: examData.id,
+      title: "Phần thi chính",
+      description: "Toàn bộ câu hỏi đề thi",
       position: 1,
-    });
+    })
+    .select("id")
+    .single();
 
-  redirect(`/admin/exams/${data.id}`);
+  if (secError) return { ok: false, message: getDatabaseErrorMessage(secError) };
+
+  // Tự động sinh danh sách câu hỏi nếu chọn template chuẩn
+  if (scaffoldedQuestions.length > 0) {
+    for (const q of scaffoldedQuestions) {
+      const qContent = q.content && q.content.trim().length > 0 ? q.content.trim() : "Nhập câu hỏi";
+      const { data: newQ, error: qErr } = await supabase
+        .from("questions")
+        .insert({
+          section_id: secData.id,
+          content: qContent,
+          question_type: q.question_type,
+          score: q.score,
+          position: q.position,
+          correct_answer_raw: q.correct_answer_raw ?? null,
+          tolerance: q.tolerance ?? 0,
+          is_active: true,
+        })
+        .select("id")
+        .single();
+
+      if (qErr) {
+        console.error("Error creating template question:", qErr);
+        continue;
+      }
+
+      if (q.options && q.options.length > 0) {
+        const optionRows = q.options.map((opt) => {
+          let optContent = opt.content && opt.content.trim().length > 0 ? opt.content.trim() : "";
+          if (!optContent) {
+            if (q.question_type === "true_false_group") {
+              const letter = ["a", "b", "c", "d", "e"][opt.position - 1] || `${opt.position}`;
+              optContent = `Ý ${letter}: Khẳng định ${opt.position}`;
+            } else {
+              const letter = String.fromCharCode(65 + opt.position - 1);
+              optContent = `Phương án ${letter}`;
+            }
+          }
+          return {
+            question_id: newQ.id,
+            content: optContent,
+            position: opt.position,
+            is_correct: opt.is_correct,
+            is_active: true,
+          };
+        });
+        const { error: optErr } = await supabase.from("question_options").insert(optionRows);
+        if (optErr) {
+          console.error("Error creating template options:", optErr);
+        }
+      }
+    }
+  }
+
+  redirect(`/admin/exams/${examData.id}`);
 }
 
 export async function updateExamAction(_state: ActionState, formData: FormData): Promise<ActionState> {
@@ -125,6 +193,8 @@ export async function updateExamAction(_state: ActionState, formData: FormData):
       show_score_after_submit: parsed.data.showScoreAfterSubmit,
       show_answers_after_submit: parsed.data.showAnswersAfterSubmit,
       show_solutions_after_submit: parsed.data.showSolutionsAfterSubmit,
+      exam_template: parsed.data.examTemplate,
+      scoring_strategy: parsed.data.scoringStrategy,
       updated_by: userId,
     })
     .eq("id", id)
@@ -173,20 +243,47 @@ export async function saveQuestionAction(_state: ActionState, formData: FormData
   await requireRole("admin", "/admin/exams");
   const rawContent = formString(formData, "content").trim();
   const contentToSave = rawContent.length > 0 ? rawContent : "Nhập câu hỏi";
+  const questionType = formString(formData, "questionType") || "multiple_choice";
 
   const parsed = questionSchema.safeParse({
     content: contentToSave,
     imagePath: formNullableString(formData, "imagePath"),
     explanation: formNullableString(formData, "explanation"),
-    score: formNumber(formData, "score") || 1,
+    score: formNumber(formData, "score") || (questionType === "short_answer" ? 0.5 : questionType === "true_false_group" ? 1.0 : 0.25),
     position: formNumber(formData, "position") || 1,
     isActive: formBoolean(formData, "isActive"),
+    questionType: questionType as "multiple_choice" | "true_false_group" | "short_answer" | "question_group" | "regular",
+    correctAnswerRaw: formNullableString(formData, "correctAnswerRaw"),
+    tolerance: formNumber(formData, "tolerance") || 0,
   });
   if (!parsed.success) return { ok: false, message: "Dữ liệu câu hỏi chưa hợp lệ.", fieldErrors: toFieldErrors(parsed.error) };
   const supabase = await createClient();
   const id = formString(formData, "questionId");
-  const sectionId = formString(formData, "sectionId");
+  let sectionId = formString(formData, "sectionId");
   const examId = formString(formData, "examId");
+
+  // Đảm bảo section tồn tại nếu sectionId rỗng
+  if (!sectionId && examId) {
+    const { data: firstSec } = await supabase
+      .from("exam_sections")
+      .select("id")
+      .eq("exam_id", examId)
+      .is("deleted_at", null)
+      .order("position", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    if (firstSec) {
+      sectionId = firstSec.id;
+    } else {
+      const { data: newSec } = await supabase
+        .from("exam_sections")
+        .insert({ exam_id: examId, title: "Phần thi chính", position: 1 })
+        .select("id")
+        .single();
+      if (newSec) sectionId = newSec.id;
+    }
+  }
 
   if (id) {
     const payload = {
@@ -196,6 +293,9 @@ export async function saveQuestionAction(_state: ActionState, formData: FormData
       score: parsed.data.score,
       position: parsed.data.position,
       is_active: parsed.data.isActive ?? false,
+      question_type: parsed.data.questionType,
+      correct_answer_raw: parsed.data.correctAnswerRaw ?? null,
+      tolerance: parsed.data.tolerance,
     };
     const result = await supabase.from("questions").update(payload).eq("id", id);
     if (result.error) return { ok: false, message: getDatabaseErrorMessage(result.error) };
@@ -217,6 +317,9 @@ export async function saveQuestionAction(_state: ActionState, formData: FormData
       score: parsed.data.score,
       position: nextPosition,
       is_active: parsed.data.isActive ?? false,
+      question_type: parsed.data.questionType,
+      correct_answer_raw: parsed.data.correctAnswerRaw ?? null,
+      tolerance: parsed.data.tolerance,
     };
 
     const { data: newQ, error: qError } = await supabase
@@ -226,13 +329,22 @@ export async function saveQuestionAction(_state: ActionState, formData: FormData
       .single();
     if (qError) return { ok: false, message: getDatabaseErrorMessage(qError) };
 
-    // Tự động tạo 4 phương án mẫu A, B, C, D cho câu hỏi mới
-    await supabase.from("question_options").insert([
-      { question_id: newQ.id, content: "Phương án A", position: 1, is_correct: true, is_active: true },
-      { question_id: newQ.id, content: "Phương án B", position: 2, is_correct: false, is_active: true },
-      { question_id: newQ.id, content: "Phương án C", position: 3, is_correct: false, is_active: true },
-      { question_id: newQ.id, content: "Phương án D", position: 4, is_correct: false, is_active: true },
-    ]);
+    // Tự động tạo phương án tương ứng với từng question type
+    if (parsed.data.questionType === "multiple_choice" || parsed.data.questionType === "regular") {
+      await supabase.from("question_options").insert([
+        { question_id: newQ.id, content: "Phương án A", position: 1, is_correct: true, is_active: true },
+        { question_id: newQ.id, content: "Phương án B", position: 2, is_correct: false, is_active: true },
+        { question_id: newQ.id, content: "Phương án C", position: 3, is_correct: false, is_active: true },
+        { question_id: newQ.id, content: "Phương án D", position: 4, is_correct: false, is_active: true },
+      ]);
+    } else if (parsed.data.questionType === "true_false_group") {
+      await supabase.from("question_options").insert([
+        { question_id: newQ.id, content: "Ý a: Khẳng định 1...", position: 1, is_correct: true, is_active: true },
+        { question_id: newQ.id, content: "Ý b: Khẳng định 2...", position: 2, is_correct: false, is_active: true },
+        { question_id: newQ.id, content: "Ý c: Khẳng định 3...", position: 3, is_correct: true, is_active: true },
+        { question_id: newQ.id, content: "Ý d: Khẳng định 4...", position: 4, is_correct: false, is_active: true },
+      ]);
+    }
   }
   revalidatePath(`/admin/exams/${examId}`);
   return { ok: true, message: id ? "Đã lưu câu hỏi." : "Đã tạo câu hỏi." };
@@ -251,7 +363,17 @@ export async function saveOptionAction(_state: ActionState, formData: FormData):
   const id = formString(formData, "optionId");
   const questionId = formString(formData, "questionId");
   const examId = formString(formData, "examId");
-  if (parsed.data.isCorrect) {
+
+  const { data: qData } = await supabase
+    .from("questions")
+    .select("question_type")
+    .eq("id", questionId)
+    .maybeSingle();
+
+  const isTf = qData?.question_type === "true_false_group";
+
+  // Với Multiple Choice, nếu đánh dấu đúng thì clear các option khác
+  if (parsed.data.isCorrect && !isTf) {
     const clear = await supabase.from("question_options").update({ is_correct: false }).eq("question_id", questionId).is("deleted_at", null);
     if (clear.error) return { ok: false, message: getDatabaseErrorMessage(clear.error) };
   }
@@ -294,22 +416,44 @@ export async function markCorrectOptionAction(_state: ActionState, formData: For
     return { ok: false, message: "Không thể chọn đáp án đúng vì dữ liệu lựa chọn chưa hợp lệ." };
   }
   const supabase = await createClient();
-  const clear = await supabase
-    .from("question_options")
-    .update({ is_correct: false })
-    .eq("question_id", parsed.questionId.data)
-    .is("deleted_at", null);
-  if (clear.error) return { ok: false, message: getDatabaseErrorMessage(clear.error) };
 
-  const setCorrect = await supabase
-    .from("question_options")
-    .update({ is_correct: true, is_active: true })
-    .eq("id", parsed.optionId.data)
-    .eq("question_id", parsed.questionId.data)
-    .is("deleted_at", null);
-  if (setCorrect.error) return { ok: false, message: getDatabaseErrorMessage(setCorrect.error) };
+  const { data: qData } = await supabase
+    .from("questions")
+    .select("question_type")
+    .eq("id", parsed.questionId.data)
+    .maybeSingle();
+
+  const isTf = qData?.question_type === "true_false_group";
+
+  if (!isTf) {
+    const clear = await supabase
+      .from("question_options")
+      .update({ is_correct: false })
+      .eq("question_id", parsed.questionId.data)
+      .is("deleted_at", null);
+    if (clear.error) return { ok: false, message: getDatabaseErrorMessage(clear.error) };
+
+    const setCorrect = await supabase
+      .from("question_options")
+      .update({ is_correct: true, is_active: true })
+      .eq("id", parsed.optionId.data)
+      .eq("question_id", parsed.questionId.data)
+      .is("deleted_at", null);
+    if (setCorrect.error) return { ok: false, message: getDatabaseErrorMessage(setCorrect.error) };
+  } else {
+    // Với True/False group: cho phép toggle is_correct của option được chỉ định
+    const targetState = formBoolean(formData, "targetCorrect");
+    const setCorrect = await supabase
+      .from("question_options")
+      .update({ is_correct: targetState, is_active: true })
+      .eq("id", parsed.optionId.data)
+      .eq("question_id", parsed.questionId.data)
+      .is("deleted_at", null);
+    if (setCorrect.error) return { ok: false, message: getDatabaseErrorMessage(setCorrect.error) };
+  }
+
   revalidatePath(`/admin/exams/${parsed.examId.data}`);
-  return { ok: true, message: "Đã chọn đáp án đúng." };
+  return { ok: true, message: "Đã cập nhật đáp án." };
 }
 
 export async function softDeleteContentAction(_state: ActionState, formData: FormData): Promise<ActionState> {
@@ -376,25 +520,52 @@ export async function transitionExamAction(_state: ActionState, formData: FormDa
   return { ok: true, message: action === "publish" ? "Đã xuất bản đề thi." : action === "close" ? "Đã đóng đề thi." : action === "archive" ? "Đã lưu trữ đề thi." : "Đã đưa đề về bản nháp." };
 }
 
-export async function cloneExamAction(_state: ActionState, formData: FormData): Promise<ActionState> {
+export async function cloneExamAction(
+  _state: ActionState,
+  formData: FormData
+): Promise<ActionState & { clonedExamId?: string }> {
   await requireRole("admin", "/admin/exams");
+  const rawTitle = formString(formData, "newTitle");
+  const rawSlug = formString(formData, "newSlug").toLowerCase().trim();
   const parsed = cloneExamSchema.safeParse({
     sourceExamId: formString(formData, "sourceExamId"),
-    newTitle: formString(formData, "newTitle"),
-    newSlug: formString(formData, "newSlug").toLowerCase(),
+    newTitle: rawTitle,
+    newSlug: rawSlug || undefined,
   });
-  if (!parsed.success) return { ok: false, message: "Dữ liệu nhân bản chưa hợp lệ.", fieldErrors: toFieldErrors(parsed.error) };
+  if (!parsed.success) {
+    return {
+      ok: false,
+      message: "Dữ liệu nhân bản chưa hợp lệ.",
+      fieldErrors: toFieldErrors(parsed.error),
+    };
+  }
+
   const supabase = await createClient();
+  let slug = parsed.data.newSlug;
+  if (!slug) {
+    slug = await resolveUniqueExamSlug(supabase, generateVietnameseSlug(parsed.data.newTitle));
+  } else {
+    slug = await resolveUniqueExamSlug(supabase, slug);
+  }
+
   const { data, error } = await supabase.rpc("clone_exam", {
     source_exam_id: parsed.data.sourceExamId,
     new_title: parsed.data.newTitle,
-    new_slug: parsed.data.newSlug,
+    new_slug: slug,
   });
   if (error) return { ok: false, message: getDatabaseErrorMessage(error) };
   const result = data?.[0];
   const message = getRpcResultError(result);
-  if (message || !result?.cloned_exam_id) return { ok: false, message: message ?? "Không thể nhân bản đề thi." };
-  redirect(`/admin/exams/${result.cloned_exam_id}`);
+  if (message || !result?.cloned_exam_id) {
+    return { ok: false, message: message ?? "Không thể nhân bản đề thi." };
+  }
+
+  revalidatePath("/admin/exams");
+  return {
+    ok: true,
+    message: "Nhân bản đề thi thành công.",
+    clonedExamId: result.cloned_exam_id,
+  };
 }
 
 export async function reorderContentAction(_state: ActionState, formData: FormData): Promise<ActionState> {

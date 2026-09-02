@@ -2,10 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, CheckCircle2, Clock, Flag, Loader2, Save } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Clock, Flag, Loader2, Save, Check, X, Calculator, Info } from "lucide-react";
 import { QuestionNavigator, type QuestionNavItem } from "@/components/exams/question-navigator";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 
 import { FullscreenViolationOverlay } from "@/components/exams/fullscreen-violation-overlay";
 import {
@@ -23,6 +25,13 @@ interface FlatQuestion extends StudentExamQuestion {
 }
 
 type SaveStatus = "idle" | "saving" | "saved" | "error";
+
+interface AnswerState {
+  selectedOptionId?: string | null;
+  textAnswer?: string | null;
+  subAnswers?: Record<string, boolean> | null;
+  isMarked: boolean;
+}
 
 interface ExamTakingUIProps {
   initialPayload: StudentAttemptPayload;
@@ -49,14 +58,14 @@ export function ExamTakingUI({ initialPayload }: ExamTakingUIProps) {
   }, [initialPayload]);
 
   // 2. Answer State
-  const [userAnswers, setUserAnswers] = useState<
-    Record<string, { selectedOptionId: string | null; isMarked: boolean }>
-  >(() => {
-    const initialMap: Record<string, { selectedOptionId: string | null; isMarked: boolean }> = {};
+  const [userAnswers, setUserAnswers] = useState<Record<string, AnswerState>>(() => {
+    const initialMap: Record<string, AnswerState> = {};
     initialPayload.answers.forEach((ans) => {
       initialMap[ans.question_id] = {
-        selectedOptionId: ans.selected_option_id,
-        isMarked: ans.is_marked,
+        selectedOptionId: ans.selected_option_id ?? null,
+        textAnswer: ans.text_answer ?? null,
+        subAnswers: ans.sub_answers ?? {},
+        isMarked: ans.is_marked ?? false,
       };
     });
     return initialMap;
@@ -196,7 +205,7 @@ export function ExamTakingUI({ initialPayload }: ExamTakingUIProps) {
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const triggerAutosave = useCallback(
-    (questionId: string, optionId: string | null, isMarked: boolean) => {
+    (questionId: string, answerPayload: Partial<AnswerState>) => {
       setSaveStatus("saving");
       setSaveErrorMessage(null);
 
@@ -208,8 +217,10 @@ export function ExamTakingUI({ initialPayload }: ExamTakingUIProps) {
         const res = await saveAnswerAction({
           attemptId: initialPayload.attempt_id,
           questionId,
-          selectedOptionId: optionId,
-          isMarked,
+          selectedOptionId: answerPayload.selectedOptionId ?? undefined,
+          textAnswer: answerPayload.textAnswer ?? undefined,
+          subAnswers: answerPayload.subAnswers ?? undefined,
+          isMarked: answerPayload.isMarked ?? false,
         });
 
         if (res.success) {
@@ -224,41 +235,107 @@ export function ExamTakingUI({ initialPayload }: ExamTakingUIProps) {
     [initialPayload.attempt_id]
   );
 
+  // Handlers for Answer Selection
   const handleSelectOption = (optionId: string) => {
     const currentQ = flatQuestions[currentIndex - 1];
     if (!currentQ) return;
 
     const currentMarked = userAnswers[currentQ.id]?.isMarked || false;
-    const nextOptionId = optionId;
+    const nextState: AnswerState = {
+      selectedOptionId: optionId,
+      isMarked: currentMarked,
+    };
 
     setUserAnswers((prev) => ({
       ...prev,
-      [currentQ.id]: {
-        selectedOptionId: nextOptionId,
-        isMarked: currentMarked,
-      },
+      [currentQ.id]: nextState,
     }));
 
-    triggerAutosave(currentQ.id, nextOptionId, currentMarked);
+    triggerAutosave(currentQ.id, nextState);
+  };
+
+  const handleToggleSubAnswer = (optionId: string, value: boolean) => {
+    const currentQ = flatQuestions[currentIndex - 1];
+    if (!currentQ) return;
+
+    const currentAns = userAnswers[currentQ.id];
+    const prevSub = currentAns?.subAnswers || {};
+    const nextSub = { ...prevSub, [optionId]: value };
+
+    const nextState: AnswerState = {
+      ...currentAns,
+      subAnswers: nextSub,
+      isMarked: currentAns?.isMarked || false,
+    };
+
+    setUserAnswers((prev) => ({
+      ...prev,
+      [currentQ.id]: nextState,
+    }));
+
+    triggerAutosave(currentQ.id, nextState);
+  };
+
+  const handleTextAnswerChange = (text: string) => {
+    const currentQ = flatQuestions[currentIndex - 1];
+    if (!currentQ) return;
+
+    const currentAns = userAnswers[currentQ.id];
+    const nextState: AnswerState = {
+      ...currentAns,
+      textAnswer: text,
+      isMarked: currentAns?.isMarked || false,
+    };
+
+    setUserAnswers((prev) => ({
+      ...prev,
+      [currentQ.id]: nextState,
+    }));
+
+    triggerAutosave(currentQ.id, nextState);
   };
 
   const handleToggleMark = () => {
     const currentQ = flatQuestions[currentIndex - 1];
     if (!currentQ) return;
 
-    const currentOpt = userAnswers[currentQ.id]?.selectedOptionId || null;
-    const nextMarked = !userAnswers[currentQ.id]?.isMarked;
+    const currentAns = userAnswers[currentQ.id];
+    const nextMarked = !currentAns?.isMarked;
+
+    const nextState: AnswerState = {
+      ...currentAns,
+      isMarked: nextMarked,
+    };
 
     setUserAnswers((prev) => ({
       ...prev,
-      [currentQ.id]: {
-        selectedOptionId: currentOpt,
-        isMarked: nextMarked,
-      },
+      [currentQ.id]: nextState,
     }));
 
-    triggerAutosave(currentQ.id, currentOpt, nextMarked);
+    triggerAutosave(currentQ.id, nextState);
   };
+
+  // Check if a question is answered
+  const isQuestionAnswered = useCallback(
+    (q: FlatQuestion) => {
+      const ans = userAnswers[q.id];
+      if (!ans) return false;
+      const qType = q.question_type || "multiple_choice";
+
+      if (qType === "multiple_choice" || qType === "regular") {
+        return Boolean(ans.selectedOptionId);
+      }
+      if (qType === "true_false_group") {
+        const sub = ans.subAnswers || {};
+        return q.options.length > 0 && q.options.every((opt) => sub[opt.id] !== undefined);
+      }
+      if (qType === "short_answer") {
+        return Boolean(ans.textAnswer && ans.textAnswer.trim().length > 0);
+      }
+      return false;
+    },
+    [userAnswers]
+  );
 
   // Navigation Items
   const navItems: QuestionNavItem[] = useMemo(() => {
@@ -266,14 +343,14 @@ export function ExamTakingUI({ initialPayload }: ExamTakingUIProps) {
       id: q.id,
       index: q.globalIndex,
       sectionTitle: q.sectionTitle,
-      isAnswered: Boolean(userAnswers[q.id]?.selectedOptionId),
+      isAnswered: isQuestionAnswered(q),
       isMarked: Boolean(userAnswers[q.id]?.isMarked),
     }));
-  }, [flatQuestions, userAnswers]);
+  }, [flatQuestions, userAnswers, isQuestionAnswered]);
 
   const answeredCount = useMemo(() => {
-    return Object.values(userAnswers).filter((ans) => Boolean(ans.selectedOptionId)).length;
-  }, [userAnswers]);
+    return flatQuestions.filter((q) => isQuestionAnswered(q)).length;
+  }, [flatQuestions, isQuestionAnswered]);
 
   const unansweredCount = flatQuestions.length - answeredCount;
   const currentQuestion = flatQuestions[currentIndex - 1];
@@ -297,6 +374,10 @@ export function ExamTakingUI({ initialPayload }: ExamTakingUIProps) {
       </div>
     );
   }
+
+  const isTfGroup = currentQuestion.question_type === "true_false_group";
+  const isShortAnswer = currentQuestion.question_type === "short_answer";
+  const isMcq = !isTfGroup && !isShortAnswer;
 
   return (
     <main className="min-h-screen bg-cyber-grid bg-[var(--background)] text-[var(--foreground)] pb-16 transition-colors duration-200">
@@ -394,6 +475,9 @@ export function ExamTakingUI({ initialPayload }: ExamTakingUIProps) {
                   <span className="text-xs font-normal text-[var(--muted-foreground)]">
                     ({currentQuestion.score} điểm)
                   </span>
+                  <span className="text-xs font-semibold px-2 py-0.5 rounded-md bg-[var(--surface-hover)] border border-[var(--border)] text-[var(--foreground)]">
+                    {isTfGroup ? "Đúng / Sai" : isShortAnswer ? "Trả lời ngắn" : "Trắc nghiệm"}
+                  </span>
                 </CardTitle>
               </div>
             </CardHeader>
@@ -407,7 +491,6 @@ export function ExamTakingUI({ initialPayload }: ExamTakingUIProps) {
               {/* Question Image if present */}
               {currentQuestion.image_path && (
                 <div className="my-4 overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--card-secondary)] p-2">
-                  {/* eslint-disable-next-html-element-suppression */}
                   <img
                     src={currentQuestion.image_path}
                     alt={`Hình minh họa câu ${currentQuestion.globalIndex}`}
@@ -416,38 +499,140 @@ export function ExamTakingUI({ initialPayload }: ExamTakingUIProps) {
                 </div>
               )}
 
-              {/* Options */}
-              <div className="space-y-3 pt-2" role="radiogroup" aria-label={`Đáp án cho câu ${currentQuestion.globalIndex}`}>
-                {currentQuestion.options.map((opt, idx) => {
-                  const optionLetter = String.fromCharCode(65 + idx); // A, B, C, D
-                  const isSelected = currentAnswer?.selectedOptionId === opt.id;
+              {/* Mode 1: Multiple Choice Options */}
+              {isMcq && (
+                <div className="space-y-3 pt-2" role="radiogroup" aria-label={`Đáp án cho câu ${currentQuestion.globalIndex}`}>
+                  {currentQuestion.options.map((opt, idx) => {
+                    const optionLetter = String.fromCharCode(65 + idx);
+                    const isSelected = currentAnswer?.selectedOptionId === opt.id;
 
-                  return (
-                    <label
-                      key={opt.id}
-                      className={`flex min-h-13 cursor-pointer items-center gap-3.5 rounded-xl border p-4 text-sm font-medium transition-all duration-200 select-none ${
-                        isSelected
-                          ? "border-[var(--primary)] bg-[var(--primary)]/10 text-[var(--foreground)] ring-1 ring-[var(--primary)]/50 shadow-md shadow-blue-500/10"
-                          : "border-[var(--border)] bg-[var(--surface)] hover:border-[var(--border-subtle)] hover:bg-[var(--surface-hover)] text-[var(--foreground)]"
-                      }`}
-                    >
-                      <input
-                        type="radio"
-                        name={`question-${currentQuestion.id}`}
-                        checked={isSelected}
-                        onChange={() => handleSelectOption(opt.id)}
-                        className="h-4 w-4 text-[var(--primary)] focus:ring-[var(--ring)] accent-[var(--primary)]"
-                      />
-                      <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-xs font-bold ${
-                        isSelected ? "bg-[var(--primary)] text-white" : "bg-[var(--surface-hover)] text-[var(--foreground)] border border-[var(--border)]"
-                      }`}>
-                        {optionLetter}
-                      </span>
-                      <span className="flex-1">{opt.content}</span>
+                    return (
+                      <label
+                        key={opt.id}
+                        className={`flex min-h-13 cursor-pointer items-center gap-3.5 rounded-xl border p-4 text-sm font-medium transition-all duration-200 select-none ${
+                          isSelected
+                            ? "border-[var(--primary)] bg-[var(--primary)]/10 text-[var(--foreground)] ring-1 ring-[var(--primary)]/50 shadow-md shadow-blue-500/10"
+                            : "border-[var(--border)] bg-[var(--surface)] hover:border-[var(--border-subtle)] hover:bg-[var(--surface-hover)] text-[var(--foreground)]"
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name={`question-${currentQuestion.id}`}
+                          checked={isSelected}
+                          onChange={() => handleSelectOption(opt.id)}
+                          className="h-4 w-4 text-[var(--primary)] focus:ring-[var(--ring)] accent-[var(--primary)]"
+                        />
+                        <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-xs font-bold ${
+                          isSelected ? "bg-[var(--primary)] text-white" : "bg-[var(--surface-hover)] text-[var(--foreground)] border border-[var(--border)]"
+                        }`}>
+                          {optionLetter}
+                        </span>
+                        <span className="flex-1">{opt.content}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Mode 2: True / False Group (4 Statements) */}
+              {isTfGroup && (
+                <div className="space-y-3 pt-2">
+                  <p className="text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider">
+                    Chọn Đúng hoặc Sai cho mỗi ý khẳng định dưới đây:
+                  </p>
+                  <div className="space-y-2.5">
+                    {currentQuestion.options.map((opt, idx) => {
+                      const letter = ["a", "b", "c", "d", "e"][idx] || `${idx + 1}`;
+                      const subAns = currentAnswer?.subAnswers || {};
+                      const selectedVal = subAns[opt.id];
+
+                      return (
+                        <div
+                          key={opt.id}
+                          className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3.5 transition-colors"
+                        >
+                          <div className="flex items-start gap-2.5 flex-1 min-w-0">
+                            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--surface-hover)] text-xs font-bold text-[var(--foreground)] border border-[var(--border)]">
+                              {letter}
+                            </span>
+                            <span className="text-sm text-[var(--foreground)] leading-relaxed">{opt.content}</span>
+                          </div>
+
+                          <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                            <button
+                              type="button"
+                              onClick={() => handleToggleSubAnswer(opt.id, true)}
+                              className={cn(
+                                "flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer",
+                                selectedVal === true
+                                  ? "bg-emerald-600 text-white shadow-md shadow-emerald-600/20"
+                                  : "border border-[var(--border)] bg-[var(--surface-hover)] text-[var(--muted-foreground)] hover:border-emerald-500/50 hover:text-emerald-600"
+                              )}
+                            >
+                              <Check className="h-3.5 w-3.5" />
+                              Đúng
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleToggleSubAnswer(opt.id, false)}
+                              className={cn(
+                                "flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer",
+                                selectedVal === false
+                                  ? "bg-rose-600 text-white shadow-md shadow-rose-600/20"
+                                  : "border border-[var(--border)] bg-[var(--surface-hover)] text-[var(--muted-foreground)] hover:border-rose-500/50 hover:text-rose-600"
+                              )}
+                            >
+                              <X className="h-3.5 w-3.5" />
+                              Sai
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Mode 3: Short Answer (Numeric / Fraction / Math Text) */}
+              {isShortAnswer && (
+                <div className="space-y-3 pt-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <label className="block text-sm font-semibold text-[var(--foreground)]">
+                      Nhập câu trả lời của bạn:
                     </label>
-                  );
-                })}
-              </div>
+                    {currentQuestion.tolerance !== undefined && currentQuestion.tolerance !== null && currentQuestion.tolerance > 0 ? (
+                      <span className="inline-flex items-center gap-1 rounded-lg bg-blue-500/10 px-2.5 py-1 text-xs font-semibold text-blue-700 dark:text-blue-300 border border-blue-500/20">
+                        <Info className="h-3.5 w-3.5" />
+                        Sai số cho phép: ± {currentQuestion.tolerance}
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 rounded-lg bg-[var(--surface-hover)] px-2.5 py-1 text-xs font-medium text-[var(--muted-foreground)] border border-[var(--border)]">
+                        <Info className="h-3.5 w-3.5" />
+                        Sai số: Không cho phép (Khớp chính xác)
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+                    <div className="relative w-full max-w-sm">
+                      <Input
+                        type="text"
+                        placeholder="Ví dụ: 1/2 hoặc 0.5 hoặc -3"
+                        value={currentAnswer?.textAnswer ?? ""}
+                        onChange={(e) => handleTextAnswerChange(e.target.value)}
+                        className="h-12 text-base font-semibold font-mono bg-[var(--input-bg)] border-[var(--input-border)] text-[var(--foreground)] rounded-xl pl-3"
+                      />
+                    </div>
+                  </div>
+                  <p className="text-xs text-[var(--muted-foreground)] flex items-center gap-1.5 pt-1">
+                    <Calculator className="h-3.5 w-3.5 text-blue-500" />
+                    <span>
+                      {currentQuestion.tolerance !== undefined && currentQuestion.tolerance !== null && currentQuestion.tolerance > 0
+                        ? `Hệ thống chấp nhận phân số (1/2), số thập phân (0.5 hoặc 0,5) hoặc số âm (-2) với sai số chấp nhận tối đa ± ${currentQuestion.tolerance}.`
+                        : "Hệ thống yêu cầu đáp án khớp giá trị chính xác (chấp nhận các cách viết tương đương như 1/2, 0.5 hoặc 0,5). Không cho phép sai số làm tròn."}
+                    </span>
+                  </p>
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -502,7 +687,7 @@ export function ExamTakingUI({ initialPayload }: ExamTakingUIProps) {
 
             {unansweredCount > 0 ? (
               <p className="text-sm text-[var(--muted-foreground)]">
-                Bạn còn <strong className="text-amber-600 dark:text-amber-400 font-semibold">{unansweredCount} câu chưa trả lời</strong>.
+                Bạn còn <strong className="text-amber-600 dark:text-amber-400 font-semibold">{unansweredCount} câu chưa hoàn thành</strong>.
                 Sau khi nộp bài, bạn sẽ không thể tiếp tục làm bài. Bạn có chắc chắn muốn nộp bài không?
               </p>
             ) : (

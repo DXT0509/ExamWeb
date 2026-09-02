@@ -32,7 +32,8 @@ test.describe("Phase 10 Step 3: Admin Dashboard Real Data & Overview E2E Tests",
 
     const detailLink = page.getByRole("link", { name: "Xem chi tiết" }).first();
     if (await detailLink.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await detailLink.click();
+      await detailLink.scrollIntoViewIfNeeded();
+      await detailLink.click({ force: true });
       await expect(page).toHaveURL(/\/admin\/attempts\/.+/, { timeout: 15000 });
       await expect(page.getByRole("heading", { name: "Chi tiết lượt thi" })).toBeVisible({ timeout: 10000 });
 

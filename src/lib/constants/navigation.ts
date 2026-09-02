@@ -19,4 +19,5 @@ export const adminLinks = [
   { href: "/admin/attempts", label: "Bài làm" },
   { href: "/admin/students", label: "Học sinh" },
   { href: "/admin/documents", label: "Tài liệu" },
+  { href: "/admin/messages", label: "Tin nhắn" },
 ];

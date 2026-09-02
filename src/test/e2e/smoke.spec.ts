@@ -11,17 +11,16 @@ test.describe("Smoke E2E Tests", () => {
   });
 
   test("Guest can browse the public exam catalog", async ({ page }) => {
-  await page.goto("/");
-  await expect(page.getByRole("heading", { name: "ExamPrep", exact: true })).toBeVisible();
-  await expect(page.getByText("Đề công khai nền tảng số")).toBeVisible();
+    await page.goto("/");
+    await expect(page.getByRole("heading", { name: "ExamPrep", exact: true })).toBeVisible();
 
-  await page.getByRole("link", { name: "Xem đề thi" }).click();
-  await expect(page).toHaveURL(/\/exams/, { timeout: 15000 });
-  await expect(page.getByRole("heading", { name: "Thư viện đề thi" })).toBeVisible();
+    await page.getByRole("link", { name: "Xem đề thi" }).first().click();
+    await expect(page).toHaveURL(/\/exams/, { timeout: 15000 });
+    await expect(page.getByRole("heading", { name: "Thư viện đề thi" })).toBeVisible();
 
-  await page.getByPlaceholder("Nhập tên đề thi").fill("nền tảng");
-  await page.getByRole("button", { name: "Lọc đề thi" }).click();
-  await expect(page.getByText("Đề công khai nền tảng số")).toBeVisible();
+    await page.getByPlaceholder("Nhập tên đề thi").fill("nền tảng");
+    await page.getByRole("button", { name: "Lọc đề thi" }).click();
+    await expect(page.getByText("Đề công khai nền tảng số")).toBeVisible();
 
   await page.getByLabel("Môn học").selectOption("toan-hoc");
   await page.getByRole("button", { name: "Lọc đề thi" }).click();

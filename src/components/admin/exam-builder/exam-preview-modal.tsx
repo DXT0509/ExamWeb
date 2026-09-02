@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Eye, CheckCircle2 } from "lucide-react";
+import { Eye, CheckCircle2, Check, X, Calculator } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -10,7 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import type { SectionData } from "./builder-section-item";
+import type { SectionData } from "./exam-builder";
 import type { ExamMetaData } from "./meta-settings-modal";
 
 interface ExamPreviewModalProps {
@@ -66,25 +66,19 @@ export function ExamPreviewModal({ exam, sections }: ExamPreviewModalProps) {
           <div className="space-y-6 py-4">
             {activeSections.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-[var(--border)] p-8 text-center text-sm text-[var(--muted-foreground)]">
-                Đề thi chưa có phần thi nào.
+                Đề thi chưa có câu hỏi nào.
               </div>
             ) : (
-              activeSections.map((section, sIndex) => {
+              activeSections.map((section) => {
                 const questions = section.questions.filter((q) => !q.deleted_at);
                 return (
                   <div key={section.id} className="space-y-4">
-                    <div className="border-b border-[var(--divider)] pb-2">
-                      <h3 className="text-base font-bold text-[var(--foreground)]">
-                        Phần {sIndex + 1}: {section.title}
-                      </h3>
-                      {section.description && (
-                        <p className="text-xs text-[var(--muted-foreground)] mt-0.5">{section.description}</p>
-                      )}
-                    </div>
-
                     <div className="space-y-4">
                       {questions.map((question, qIndex) => {
                         const options = question.question_options.filter((o) => !o.deleted_at);
+                        const isTf = question.question_type === "true_false_group";
+                        const isShort = question.question_type === "short_answer";
+
                         return (
                           <div
                             key={question.id}
@@ -109,35 +103,93 @@ export function ExamPreviewModal({ exam, sections }: ExamPreviewModalProps) {
                               </div>
                             )}
 
-                            <div className="grid gap-2 sm:grid-cols-2 pt-1">
-                              {options.map((opt, oIndex) => {
-                                const letter = String.fromCharCode(65 + oIndex);
-                                return (
-                                  <div
-                                    key={opt.id}
-                                    className={`flex items-center gap-2.5 rounded-xl border p-2.5 text-xs ${
-                                      opt.is_correct
-                                        ? "border-emerald-500/40 bg-emerald-500/15 text-[var(--foreground)] font-semibold"
-                                        : "border-[var(--border)] bg-[var(--surface)] text-[var(--foreground)]"
-                                    }`}
-                                  >
-                                    <span
-                                      className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
+                            {/* Multiple Choice Preview */}
+                            {!isTf && !isShort && (
+                              <div className="grid gap-2 sm:grid-cols-2 pt-1">
+                                {options.map((opt, oIndex) => {
+                                  const letter = String.fromCharCode(65 + oIndex);
+                                  return (
+                                    <div
+                                      key={opt.id}
+                                      className={`flex items-center gap-2.5 rounded-xl border p-2.5 text-xs ${
                                         opt.is_correct
-                                          ? "bg-emerald-600 text-white"
-                                          : "bg-[var(--surface-hover)] text-[var(--foreground)]"
+                                          ? "border-emerald-500/40 bg-emerald-500/15 text-[var(--foreground)] font-semibold"
+                                          : "border-[var(--border)] bg-[var(--surface)] text-[var(--foreground)]"
                                       }`}
                                     >
-                                      {letter}
-                                    </span>
-                                    <span className="flex-1 break-words">{opt.content}</span>
-                                    {opt.is_correct && (
-                                      <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                                    )}
-                                  </div>
-                                );
-                              })}
-                            </div>
+                                      <span
+                                        className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
+                                          opt.is_correct
+                                            ? "bg-emerald-600 text-white"
+                                            : "bg-[var(--surface-hover)] text-[var(--foreground)]"
+                                        }`}
+                                      >
+                                        {letter}
+                                      </span>
+                                      <span className="flex-1 break-words">{opt.content}</span>
+                                      {opt.is_correct && (
+                                        <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+
+                            {/* True / False Group Preview */}
+                            {isTf && (
+                              <div className="space-y-2 pt-1">
+                                {options.map((opt, oIndex) => {
+                                  const letter = ["a", "b", "c", "d", "e"][oIndex] || `${oIndex + 1}`;
+                                  return (
+                                    <div
+                                      key={opt.id}
+                                      className={`flex items-center justify-between gap-3 rounded-xl border p-2.5 text-xs ${
+                                        opt.is_correct
+                                          ? "border-emerald-500/30 bg-emerald-500/5"
+                                          : "border-rose-500/30 bg-rose-500/5"
+                                      }`}
+                                    >
+                                      <div className="flex items-center gap-2 flex-1 min-w-0">
+                                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--surface-hover)] text-[11px] font-bold">
+                                          {letter}
+                                        </span>
+                                        <span className="text-[var(--foreground)]">{opt.content}</span>
+                                      </div>
+                                      <span
+                                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md font-bold text-[11px] ${
+                                          opt.is_correct
+                                            ? "bg-emerald-600 text-white"
+                                            : "bg-rose-600 text-white"
+                                        }`}
+                                      >
+                                        {opt.is_correct ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
+                                        {opt.is_correct ? "Đúng" : "Sai"}
+                                      </span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+
+                            {/* Short Answer Preview */}
+                            {isShort && (
+                              <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-3 text-xs flex items-center justify-between">
+                                <span className="font-semibold text-blue-700 dark:text-blue-300 flex items-center gap-1.5">
+                                  <Calculator className="h-4 w-4" />
+                                  Đáp án mẫu: <span className="font-mono text-sm">{question.correct_answer_raw || "Chưa có"}</span>
+                                </span>
+                                {question.tolerance !== undefined && question.tolerance !== null && question.tolerance > 0 ? (
+                                  <span className="font-mono text-blue-700 dark:text-blue-300 bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20">
+                                    Sai số: ± {question.tolerance}
+                                  </span>
+                                ) : (
+                                  <span className="text-[var(--muted-foreground)] bg-[var(--surface-hover)] px-2 py-0.5 rounded border border-[var(--border)]">
+                                    Sai số: Không cho phép (± 0)
+                                  </span>
+                                )}
+                              </div>
+                            )}
 
                             {question.explanation && (
                               <div className="rounded-xl border border-blue-500/20 bg-blue-500/10 p-3 text-xs text-blue-900 dark:text-blue-200">

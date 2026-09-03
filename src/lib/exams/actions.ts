@@ -9,6 +9,7 @@ import { type ActionState, toFieldErrors } from "@/lib/admin/types";
 import { requireRole } from "@/lib/auth/require-user";
 import { getDatabaseErrorMessage, getRpcResultError } from "@/lib/exams/errors";
 import { getTemplateConfig } from "@/lib/exams/templates";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import {
   cloneExamSchema,
@@ -604,17 +605,52 @@ export async function uploadQuestionImageAction(
       .replace(/[^a-zA-Z0-9.-]/g, "_")
       .replace(/_{2,}/g, "_");
     const filename = `${crypto.randomUUID()}-${safeName}`;
+    const storagePath = `uploads/${filename}`;
+    const fileBuffer = Buffer.from(await validFile.arrayBuffer());
 
-    // Lưu vào thư mục public/uploads/questions/
-    const uploadDir = path.join(process.cwd(), "public", "uploads", "questions");
-    await fs.mkdir(uploadDir, { recursive: true });
-    const fullPath = path.join(uploadDir, filename);
+    // 1. Tải lên Supabase Storage bucket 'questions'
+    try {
+      const supabase = process.env.SUPABASE_SERVICE_ROLE_KEY
+        ? createAdminClient()
+        : await createClient();
 
-    const buffer = Buffer.from(await validFile.arrayBuffer());
-    await fs.writeFile(fullPath, buffer);
+      const { error: uploadError } = await supabase.storage
+        .from("questions")
+        .upload(storagePath, fileBuffer, {
+          contentType: validFile.type || "application/octet-stream",
+          upsert: false,
+        });
 
-    const publicUrl = `/uploads/questions/${filename}`;
-    return { ok: true, message: "Tải ảnh lên thành công.", url: publicUrl };
+      if (!uploadError) {
+        const {
+          data: { publicUrl },
+        } = supabase.storage.from("questions").getPublicUrl(storagePath);
+
+        return { ok: true, message: "Tải ảnh lên thành công.", url: publicUrl };
+      }
+    } catch {
+      // Nếu có lỗi kết nối Storage, chuyển xuống fallback bên dưới
+    }
+
+    // 2. Dự phòng lưu local nếu đang chạy môi trường phát triển (không phải Vercel serverless)
+    if (!process.env.VERCEL) {
+      try {
+        const uploadDir = path.join(process.cwd(), "public", "uploads", "questions");
+        await fs.mkdir(uploadDir, { recursive: true });
+        const fullPath = path.join(uploadDir, filename);
+        await fs.writeFile(fullPath, fileBuffer);
+
+        const publicUrl = `/uploads/questions/${filename}`;
+        return { ok: true, message: "Tải ảnh lên thành công.", url: publicUrl };
+      } catch {
+        // Fallthrough
+      }
+    }
+
+    return {
+      ok: false,
+      message: "Không thể tải hình ảnh lên Supabase Storage. Vui lòng kiểm tra bucket 'questions'.",
+    };
   } catch (error) {
     return {
       ok: false,
@@ -622,3 +658,4 @@ export async function uploadQuestionImageAction(
     };
   }
 }
+

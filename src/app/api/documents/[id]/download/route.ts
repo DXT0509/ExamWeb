@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProfile } from "@/lib/auth/get-current-profile";
 
 export async function GET(
@@ -44,7 +45,10 @@ export async function GET(
   // If file_path, generate signed URL from Supabase Storage
   if (document.file_path) {
     const filename = document.file_path.split("/").pop() || `${document.title}.pdf`;
-    const { data: signedData, error: signError } = await supabase.storage
+    const storageClient = process.env.SUPABASE_SERVICE_ROLE_KEY
+      ? createAdminClient()
+      : supabase;
+    const { data: signedData, error: signError } = await storageClient.storage
       .from("documents")
       .createSignedUrl(document.file_path, 60, {
         download: filename,

@@ -5,6 +5,7 @@ import { requireRole } from "@/lib/auth/require-user";
 import { formBoolean, formNullableString, formString } from "@/lib/admin/form-data";
 import { type ActionState, toFieldErrors } from "@/lib/admin/types";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getDatabaseErrorMessage } from "@/lib/exams/errors";
 import {
   documentSchema,
@@ -46,8 +47,11 @@ export async function saveDocumentAction(_state: ActionState, formData: FormData
       const storagePath = `uploads/${crypto.randomUUID()}-${safeName}`;
 
       // Upload file to Supabase Storage
+      const storageClient = process.env.SUPABASE_SERVICE_ROLE_KEY
+        ? createAdminClient()
+        : supabase;
       const fileBuffer = Buffer.from(await file.arrayBuffer());
-      const { error: uploadError } = await supabase.storage
+      const { error: uploadError } = await storageClient.storage
         .from("documents")
         .upload(storagePath, fileBuffer, {
           contentType: file.type || "application/octet-stream",
@@ -96,7 +100,10 @@ export async function saveDocumentAction(_state: ActionState, formData: FormData
 
   if (!parsed.success) {
     if (hasNewFile && filePathToSave) {
-      await supabase.storage.from("documents").remove([filePathToSave]);
+      const storageClient = process.env.SUPABASE_SERVICE_ROLE_KEY
+        ? createAdminClient()
+        : supabase;
+      await storageClient.storage.from("documents").remove([filePathToSave]);
     }
     return {
       ok: false,
@@ -128,13 +135,19 @@ export async function saveDocumentAction(_state: ActionState, formData: FormData
 
   if (result.error) {
     if (hasNewFile && filePathToSave) {
-      await supabase.storage.from("documents").remove([filePathToSave]);
+      const storageClient = process.env.SUPABASE_SERVICE_ROLE_KEY
+        ? createAdminClient()
+        : supabase;
+      await storageClient.storage.from("documents").remove([filePathToSave]);
     }
     return { ok: false, message: getDatabaseErrorMessage(result.error) };
   }
 
   if (oldFilePathToDelete) {
-    await supabase.storage.from("documents").remove([oldFilePathToDelete]);
+    const storageClient = process.env.SUPABASE_SERVICE_ROLE_KEY
+      ? createAdminClient()
+      : supabase;
+    await storageClient.storage.from("documents").remove([oldFilePathToDelete]);
   }
 
   revalidatePath("/admin/documents");

@@ -7,6 +7,11 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "ExamPrep - Nền tảng luyện thi trực tuyến",
   description: "Nền tảng luyện thi trực tuyến thông minh, bảo mật và chính xác.",
+  icons: {
+    icon: [
+      { url: "/favicon.svg", type: "image/svg+xml" },
+    ],
+  },
 };
 
 const themeInitScript = `

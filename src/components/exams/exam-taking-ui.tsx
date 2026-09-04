@@ -484,9 +484,11 @@ export function ExamTakingUI({ initialPayload }: ExamTakingUIProps) {
 
             <CardContent className="space-y-6 pt-5">
               {/* Question Text */}
-              <div className="text-base font-medium leading-relaxed whitespace-pre-line text-[var(--foreground)]">
-                {currentQuestion.content}
-              </div>
+              {currentQuestion.content && currentQuestion.content !== "Nhập câu hỏi" && (
+                <div className="text-base font-medium leading-relaxed whitespace-pre-line text-[var(--foreground)]">
+                  {currentQuestion.content}
+                </div>
+              )}
 
               {/* Question Image if present */}
               {currentQuestion.image_path && (

@@ -739,9 +739,13 @@ export function BuilderQuestionCard({
                   question.content.trim().length > 0 &&
                   question.content !== "Nhập câu hỏi" ? (
                     question.content
+                  ) : question.image_path ? (
+                    <span className="text-[var(--muted-foreground)] italic font-normal text-xs">
+                      [Nội dung câu hỏi bằng hình ảnh]
+                    </span>
                   ) : (
                     <span className="text-[var(--muted-foreground)] italic font-normal">
-                      Câu {questionIndex + 1}: [Chưa nhập nội dung câu hỏi — Bấm vào để soạn nội dung]
+                      Câu {questionIndex + 1}: [Chưa nhập nội dung câu hỏi — Bấm vào để soạn nội dung hoặc dán ảnh]
                     </span>
                   )}
                 </p>

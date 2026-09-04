@@ -243,12 +243,13 @@ export async function saveSectionAction(_state: ActionState, formData: FormData)
 export async function saveQuestionAction(_state: ActionState, formData: FormData): Promise<ActionState> {
   await requireRole("admin", "/admin/exams");
   const rawContent = formString(formData, "content").trim();
-  const contentToSave = rawContent.length > 0 ? rawContent : "Nhập câu hỏi";
+  const imagePath = formNullableString(formData, "imagePath");
+  const contentToSave = rawContent.length > 0 ? rawContent : imagePath ? "" : "Nhập câu hỏi";
   const questionType = formString(formData, "questionType") || "multiple_choice";
 
   const parsed = questionSchema.safeParse({
     content: contentToSave,
-    imagePath: formNullableString(formData, "imagePath"),
+    imagePath,
     explanation: formNullableString(formData, "explanation"),
     score: formNumber(formData, "score") || (questionType === "short_answer" ? 0.5 : questionType === "true_false_group" ? 1.0 : 0.25),
     position: formNumber(formData, "position") || 1,

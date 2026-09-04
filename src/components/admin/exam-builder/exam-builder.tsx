@@ -151,7 +151,10 @@ export function ExamBuilder({
 
   allQuestions.forEach((q, qIdx) => {
     const qNum = qIdx + 1;
-    if (!q.content || !q.content.trim() || q.content === "Nhập câu hỏi") {
+    const hasText = Boolean(q.content && q.content.trim() && q.content !== "Nhập câu hỏi");
+    const hasImage = Boolean(q.image_path && q.image_path.trim());
+
+    if (!hasText && !hasImage) {
       validationIssues.push(`Câu ${qNum}: Chưa nhập nội dung câu hỏi.`);
     }
 

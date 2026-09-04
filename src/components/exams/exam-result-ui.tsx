@@ -322,7 +322,9 @@ export function ExamResultUI({ result }: ExamResultUIProps) {
                 </CardHeader>
 
                 <CardContent className="space-y-4 pt-4">
-                  <p className="text-sm font-medium text-[var(--foreground)] whitespace-pre-line">{q.content}</p>
+                  {q.content && q.content !== "Nhập câu hỏi" && (
+                    <p className="text-sm font-medium text-[var(--foreground)] whitespace-pre-line">{q.content}</p>
+                  )}
 
                   {q.image_path && (
                     <div className="my-2 overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--card-secondary)] p-2">

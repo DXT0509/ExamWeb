@@ -86,7 +86,8 @@ export function ExamPreviewModal({ exam, sections }: ExamPreviewModalProps) {
                           >
                             <div className="flex items-start justify-between gap-3">
                               <span className="font-semibold text-sm text-[var(--foreground)]">
-                                Câu {qIndex + 1}: {question.content}
+                                Câu {qIndex + 1}
+                                {question.content && question.content !== "Nhập câu hỏi" ? `: ${question.content}` : ""}
                               </span>
                               <span className="shrink-0 rounded-md bg-[var(--surface-hover)] px-2 py-0.5 text-xs font-semibold text-[var(--foreground)] border border-[var(--border)]">
                                 {question.score} điểm

@@ -17,7 +17,9 @@ import {
   X,
   Calculator,
   Info,
+  Clipboard,
 } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -103,6 +105,7 @@ export function BuilderQuestionCard({
     question.image_path?.startsWith("http") ? "url" : "file"
   );
   const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const [fileError, setFileError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -118,37 +121,106 @@ export function BuilderQuestionCard({
   const hasEnoughOptions = isMcq ? activeOptions.length >= 2 : isTfGroup ? activeOptions.length >= 1 : true;
   const hasShortAnswer = isShortAnswer ? Boolean(correctAnswerRaw && correctAnswerRaw.trim().length > 0) : true;
 
-  const handleImageFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const uploadAndApplyImage = async (file: File) => {
     setFileError(null);
-    const file = e.target.files?.[0];
-    if (!file) return;
 
     if (file.size > 5 * 1024 * 1024) {
-      setFileError("Dung lượng ảnh vượt quá giới hạn 5MB.");
+      const msg = "Dung lượng ảnh vượt quá giới hạn 5MB.";
+      setFileError(msg);
+      toast.error(msg);
       if (fileInputRef.current) fileInputRef.current.value = "";
       return;
     }
 
     if (!file.type.startsWith("image/")) {
-      setFileError("Vui lòng chọn tệp định dạng hình ảnh hợp lệ (PNG, JPG, WebP, GIF, SVG).");
+      const msg = "Vui lòng chọn hoặc dán tệp hình ảnh hợp lệ (PNG, JPG, WebP, GIF, SVG).";
+      setFileError(msg);
+      toast.error(msg);
       if (fileInputRef.current) fileInputRef.current.value = "";
       return;
     }
 
+    setShowImageField(true);
+    setImageSourceType("file");
     setIsUploadingImage(true);
+
+    const toastId = `upload-question-img-${question.id}`;
+    toast.loading("Đang tải ảnh lên máy chủ...", { id: toastId });
+
     try {
+      const ext = file.type.split("/")[1] || "png";
+      const safeExt = ext === "jpeg" ? "jpg" : ext;
+      const uploadFile =
+        file.name && file.name !== "image.png" && file.name !== "blob"
+          ? file
+          : new File([file], `screenshot-${Date.now()}.${safeExt}`, { type: file.type });
+
       const uploadData = new FormData();
-      uploadData.append("file", file);
+      uploadData.append("file", uploadFile);
       const res = await uploadQuestionImageAction(uploadData);
       if (res.ok && res.url) {
         setImagePath(res.url);
+        toast.success("Đã dán và tải ảnh lên thành công!", { id: toastId });
       } else {
-        setFileError(res.message || "Không thể tải ảnh lên.");
+        const errorMsg = res.message || "Không thể tải ảnh lên.";
+        setFileError(errorMsg);
+        toast.error(errorMsg, { id: toastId });
       }
     } catch {
-      setFileError("Lỗi kết nối khi tải ảnh lên.");
+      const errorMsg = "Lỗi kết nối khi tải ảnh lên.";
+      setFileError(errorMsg);
+      toast.error(errorMsg, { id: toastId });
     } finally {
       setIsUploadingImage(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const handleImageFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    await uploadAndApplyImage(file);
+  };
+
+  const handlePasteImage = async (e: React.ClipboardEvent) => {
+    if (readOnly) return;
+    const items = e.clipboardData?.items;
+    if (!items) return;
+
+    let imageFile: File | null = null;
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (item && item.kind === "file" && item.type.startsWith("image/")) {
+        imageFile = item.getAsFile();
+        break;
+      }
+    }
+
+    if (!imageFile) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (editingMode !== "content") {
+      setEditingMode("content");
+    }
+
+    await uploadAndApplyImage(imageFile);
+  };
+
+  const handleDropImage = async (e: React.DragEvent) => {
+    if (readOnly) return;
+    const files = e.dataTransfer?.files;
+    if (!files || files.length === 0) return;
+    const file = files[0];
+    if (file && file.type.startsWith("image/")) {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDragging(false);
+      if (editingMode !== "content") {
+        setEditingMode("content");
+      }
+      await uploadAndApplyImage(file);
     }
   };
 
@@ -208,6 +280,7 @@ export function BuilderQuestionCard({
 
   return (
     <div
+      onPaste={handlePasteImage}
       className={cn(
         "group/card relative rounded-2xl border bg-[var(--card)] shadow-xs transition-all duration-200",
         editingMode !== "none"
@@ -390,7 +463,26 @@ export function BuilderQuestionCard({
         {/* STATE 1: EDITING QUESTION CONTENT ONLY                                    */}
         {/* ========================================================================= */}
         {editingMode === "content" && !readOnly ? (
-          <div className="space-y-4 rounded-2xl border border-[var(--primary)]/30 bg-[var(--surface)]/50 p-4 sm:p-5">
+          <div
+            onPaste={handlePasteImage}
+            onDragOver={(e) => {
+              if (e.dataTransfer.types.includes("Files")) {
+                e.preventDefault();
+                setIsDragging(true);
+              }
+            }}
+            onDragLeave={(e) => {
+              if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+              setIsDragging(false);
+            }}
+            onDrop={handleDropImage}
+            className={cn(
+              "space-y-4 rounded-2xl border bg-[var(--surface)]/50 p-4 sm:p-5 transition-all duration-200 relative",
+              isDragging
+                ? "border-dashed border-[var(--primary)] ring-2 ring-[var(--primary)]/20 bg-[var(--primary)]/5"
+                : "border-[var(--primary)]/30"
+            )}
+          >
             <div className="flex items-center justify-between border-b border-[var(--divider)] pb-2">
               <span className="text-xs font-bold uppercase tracking-wider text-[var(--primary)] flex items-center gap-1.5">
                 <Pencil className="h-3.5 w-3.5" />
@@ -439,12 +531,27 @@ export function BuilderQuestionCard({
               <textarea
                 value={content === "Nhập câu hỏi" ? "" : content}
                 onChange={(e) => setContent(e.target.value)}
+                onPaste={handlePasteImage}
                 placeholder={`Nhập nội dung câu hỏi ${questionIndex + 1}...`}
                 rows={3}
                 className="mt-1 w-full rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)] p-3 text-sm text-[var(--foreground)] transition-colors focus:border-[var(--primary)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)]/20"
                 autoFocus
               />
             </label>
+            <div className="flex flex-wrap items-center justify-between gap-1.5 -mt-2 text-[11px] text-[var(--muted-foreground)]">
+              <span className="inline-flex items-center gap-1.5">
+                <Clipboard className="h-3.5 w-3.5 text-[var(--primary)] shrink-0" />
+                <span>
+                  Mẹo: Nhấn <kbd className="px-1.5 py-0.5 rounded bg-[var(--surface-hover)] border border-[var(--border)] font-mono text-[10px] text-[var(--foreground)] font-semibold shadow-2xs">Ctrl + V</kbd> để dán nhanh ảnh chụp màn hình vào đây
+                </span>
+              </span>
+              {isUploadingImage && (
+                <span className="inline-flex items-center gap-1.5 text-[var(--primary)] font-medium">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  Đang tải ảnh lên...
+                </span>
+              )}
+            </div>
 
             <div className="flex items-end gap-2">
               <Button
@@ -524,7 +631,7 @@ export function BuilderQuestionCard({
                       onChange={handleImageFileChange}
                       className="hidden"
                     />
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <Button
                         type="button"
                         variant="outline"
@@ -545,6 +652,9 @@ export function BuilderQuestionCard({
                           </>
                         )}
                       </Button>
+                      <span className="text-xs text-[var(--muted-foreground)] inline-flex items-center gap-1">
+                        hoặc dán trực tiếp <kbd className="px-1.5 py-0.5 rounded bg-[var(--surface-hover)] border border-[var(--border)] font-mono text-[10px] text-[var(--foreground)] font-semibold shadow-2xs">Ctrl + V</kbd>
+                      </span>
                     </div>
                     {fileError && (
                       <p className="text-xs text-rose-600 dark:text-rose-400 font-medium">

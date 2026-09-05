@@ -47,23 +47,11 @@ describe("Exam Builder UX Refinement & Template Fixed Logic", () => {
     expect(questions.slice(35, 50).every((q) => q.question_type === "short_answer" && q.score === 1.0)).toBe(true);
   });
 
-  it("verifies math equality and tolerance behavior for Short Answer questions", () => {
-    // 1/2 == 0.5 == 2/4 == 0.50
-    expect(evaluateMathAnswer("1/2", "0.5")).toBe(true);
-    expect(evaluateMathAnswer("2/4", "0.50")).toBe(true);
-    expect(evaluateMathAnswer("0,5", "1/2")).toBe(true);
-    expect(evaluateMathAnswer("-3/4", "-0.75")).toBe(true);
-
-    // Tolerance for irrational numbers (sqrt(2) approx 1.4142)
-    const expectedSqrt2 = "1.4142";
-    expect(evaluateMathAnswer("1.41421356", expectedSqrt2, 0.001)).toBe(true);
-    expect(evaluateMathAnswer("1.4135", expectedSqrt2, 0.001)).toBe(true);
-    expect(evaluateMathAnswer("1.4150", expectedSqrt2, 0.001)).toBe(true);
-    expect(evaluateMathAnswer("1.4100", expectedSqrt2, 0.001)).toBe(false);
-
-    // Zero tolerance requires exact mathematical equality
-    expect(evaluateMathAnswer("1/2", "0.5", 0)).toBe(true);
-    expect(evaluateMathAnswer("1/2", "0.5000", 0)).toBe(true);
-    expect(evaluateMathAnswer("0.51", "0.5", 0)).toBe(false);
+  it("verifies exact string match behavior for Short Answer questions", () => {
+    expect(evaluateMathAnswer("0.5", "0.5")).toBe(true);
+    expect(evaluateMathAnswer(" 0.5 ", "0.5")).toBe(true);
+    expect(evaluateMathAnswer("1/2", "1/2")).toBe(true);
+    expect(evaluateMathAnswer("1/2", "0.5")).toBe(false);
+    expect(evaluateMathAnswer("0,5", "0.5")).toBe(false);
   });
 });

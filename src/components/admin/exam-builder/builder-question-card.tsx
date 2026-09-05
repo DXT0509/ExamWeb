@@ -95,6 +95,7 @@ export function BuilderQuestionCard({
     question.image_path?.startsWith("http") ? "url" : "file"
   );
   const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const isUploadingImageRef = useRef(false);
   const [isDragging, setIsDragging] = useState(false);
   const [fileError, setFileError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -237,8 +238,13 @@ export function BuilderQuestionCard({
       clearTimeout(saveTimeoutRef.current);
       saveTimeoutRef.current = null;
     }
+    // If an image upload is currently in progress, do not overwrite with stale local data
+    if (isUploadingImageRef.current) {
+      setEditingMode("none");
+      return;
+    }
     const finalContent = content.trim() === "Nhập câu hỏi" ? "" : content.trim();
-    const activeImg = (imagePath || latestValuesRef.current.imagePath).trim();
+    const activeImg = (latestValuesRef.current.imagePath || imagePath).trim();
     await triggerAutoSave({
       content: finalContent,
       image_path: activeImg ? activeImg : null,
@@ -357,6 +363,7 @@ export function BuilderQuestionCard({
     setShowImageField(true);
     setImageSourceType("file");
     setIsUploadingImage(true);
+    isUploadingImageRef.current = true;
 
     const toastId = `upload-question-img-${question.id}`;
     toast.loading("Đang tải ảnh lên máy chủ...", { id: toastId });
@@ -397,6 +404,7 @@ export function BuilderQuestionCard({
       toast.error(errorMsg, { id: toastId });
     } finally {
       setIsUploadingImage(false);
+      isUploadingImageRef.current = false;
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };

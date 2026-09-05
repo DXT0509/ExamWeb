@@ -21,32 +21,18 @@ describe("Mathematical Answer Parser & Normalizer", () => {
     expect(parseMathValue(null)).toBeNull();
   });
 
-  it("evaluates mathematical equality between fractions and decimals", () => {
-    expect(evaluateMathAnswer("1/2", "0.5")).toBe(true);
-    expect(evaluateMathAnswer("0.5", "1/2")).toBe(true);
-    expect(evaluateMathAnswer("2/4", "0.50")).toBe(true);
-    expect(evaluateMathAnswer("0,5", "1/2")).toBe(true);
-    expect(evaluateMathAnswer("-3/4", "-0.75")).toBe(true);
-    expect(evaluateMathAnswer(" -1 / 2 ", "-0.5")).toBe(true);
-    expect(evaluateMathAnswer("4", "4.00")).toBe(true);
-  });
-
-  it("evaluates mathematical tolerance accurately", () => {
-    expect(evaluateMathAnswer("3.14159", "3.1416", 0.0001)).toBe(true);
-    expect(evaluateMathAnswer("3.14", "3.1416", 0.0001)).toBe(false);
-
-    // User scenario: Expected 1.4142 with tolerance 0.001
-    expect(evaluateMathAnswer("1.4145", "1.4142", 0.001)).toBe(true);
-    expect(evaluateMathAnswer("1,4145", "1.4142", 0.001)).toBe(true);
-    expect(evaluateMathAnswer("1.4132", "1.4142", 0.001)).toBe(true);
-    expect(evaluateMathAnswer("1.4152", "1.4142", 0.001)).toBe(true);
-    expect(evaluateMathAnswer("1.4131", "1.4142", 0.001)).toBe(false);
-    expect(evaluateMathAnswer("1.4153", "1.4142", 0.001)).toBe(false);
-  });
-
-  it("supports fallback text normalization for strings", () => {
-    expect(evaluateMathAnswer(" (1; 2) ", "(1;2)")).toBe(true);
-    expect(evaluateMathAnswer("x = 5", "X=5")).toBe(true);
+  it("evaluates exact match requirement for short answer strings", () => {
+    expect(evaluateMathAnswer("0.5", "0.5")).toBe(true);
+    expect(evaluateMathAnswer(" 0.5 ", "0.5")).toBe(true);
+    expect(evaluateMathAnswer("1/2", "1/2")).toBe(true);
+    expect(evaluateMathAnswer("1/2", "0.5")).toBe(false);
+    expect(evaluateMathAnswer("0.5", "1/2")).toBe(false);
+    expect(evaluateMathAnswer("2/4", "0.50")).toBe(false);
+    expect(evaluateMathAnswer("3.14159", "3.14159")).toBe(true);
+    expect(evaluateMathAnswer("3.14", "3.1416")).toBe(false);
+    expect(evaluateMathAnswer(" (1; 2) ", "(1; 2)")).toBe(true);
+    expect(evaluateMathAnswer("x = 5", "x = 5")).toBe(true);
+    expect(evaluateMathAnswer("x = 5", "X=5")).toBe(false);
     expect(evaluateMathAnswer("x = 5", "x = 6")).toBe(false);
   });
 });

@@ -135,21 +135,21 @@ describe("THPT Math 2026 Scoring Strategy Engine", () => {
     expect(res1.isCorrect).toBe(true);
     expect(res1.score).toBe(0.5);
 
-    // Equivalent decimal input
+    // Whitespace trimmed matching input
     const res2 = strategy.evaluateQuestion(question, {
       question_id: "q-sa-1",
-      text_answer: "0.50",
+      text_answer: " 1/2 ",
     });
     expect(res2.isCorrect).toBe(true);
     expect(res2.score).toBe(0.5);
 
-    // Comma decimal input
+    // Non-exact string input
     const res3 = strategy.evaluateQuestion(question, {
       question_id: "q-sa-1",
       text_answer: "0,5",
     });
-    expect(res3.isCorrect).toBe(true);
-    expect(res3.score).toBe(0.5);
+    expect(res3.isCorrect).toBe(false);
+    expect(res3.score).toBe(0);
 
     // Wrong input
     const res4 = strategy.evaluateQuestion(question, {

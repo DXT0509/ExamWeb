@@ -224,54 +224,61 @@ export function ExamBuilder({
     questionId: string,
     payload: Partial<QuestionData>
   ) => {
-    // Optimistic update
-    setSections((prev) => {
-      const updated = prev.map((s) => ({
-        ...s,
-        questions: s.questions.map((q) =>
-          q.id === questionId ? { ...q, ...payload } : q
-        ),
-      }));
-      latestSectionsRef.current = updated;
-      return updated;
-    });
+    // 1. Synchronously update state and ref to avoid stale closures during rapid saves
+    const updatedSections = latestSectionsRef.current.map((s) => ({
+      ...s,
+      questions: s.questions.map((q) =>
+        q.id === questionId ? { ...q, ...payload } : q
+      ),
+    }));
+    latestSectionsRef.current = updatedSections;
+    setSections(updatedSections);
 
-    startTransition(async () => {
-      const allQ = latestSectionsRef.current
-        .filter((s) => !("deleted_at" in s && s.deleted_at))
-        .flatMap((s) => s.questions);
-      const targetQ = allQ.find((q) => q.id === questionId);
-      if (!targetQ) return;
+    const allQ = updatedSections
+      .filter((s) => !("deleted_at" in s && s.deleted_at))
+      .flatMap((s) => s.questions);
+    const targetQ = allQ.find((q) => q.id === questionId);
+    if (!targetQ) return;
 
-      const mergedContent = payload.content !== undefined ? payload.content : targetQ.content;
-      const mergedType = payload.question_type !== undefined ? payload.question_type : (targetQ.question_type || "multiple_choice");
-      const mergedScore = payload.score !== undefined ? payload.score : targetQ.score;
-      const mergedPosition = payload.position !== undefined ? payload.position : targetQ.position;
-      const mergedRawAns = payload.correct_answer_raw !== undefined ? payload.correct_answer_raw : targetQ.correct_answer_raw;
-      const mergedTol = payload.tolerance !== undefined ? payload.tolerance : targetQ.tolerance;
-      const mergedExplanation = payload.explanation !== undefined ? payload.explanation : targetQ.explanation;
-      const mergedImagePath = payload.image_path !== undefined ? payload.image_path : targetQ.image_path;
-      const mergedIsActive = payload.is_active !== undefined ? payload.is_active : targetQ.is_active;
+    const mergedContent = payload.content !== undefined ? payload.content : targetQ.content;
+    const mergedType = payload.question_type !== undefined ? payload.question_type : (targetQ.question_type || "multiple_choice");
+    const mergedScore = payload.score !== undefined ? payload.score : targetQ.score;
+    const mergedPosition = payload.position !== undefined ? payload.position : targetQ.position;
+    const mergedRawAns = payload.correct_answer_raw !== undefined ? payload.correct_answer_raw : targetQ.correct_answer_raw;
+    const mergedTol = payload.tolerance !== undefined ? payload.tolerance : targetQ.tolerance;
+    const mergedExplanation = payload.explanation !== undefined ? payload.explanation : targetQ.explanation;
+    const mergedImagePath = payload.image_path !== undefined ? payload.image_path : targetQ.image_path;
+    const mergedIsActive = payload.is_active !== undefined ? payload.is_active : targetQ.is_active;
 
-      const formData = new FormData();
-      formData.append("examId", exam.id);
-      formData.append("sectionId", targetQ.section_id);
-      formData.append("questionId", questionId);
-      formData.append("content", mergedContent ?? "");
-      formData.append("questionType", mergedType);
-      formData.append("score", (mergedScore ?? 0.25).toString());
-      formData.append("position", (mergedPosition ?? 1).toString());
+    const formData = new FormData();
+    formData.append("examId", exam.id);
+    formData.append("sectionId", targetQ.section_id);
+    formData.append("questionId", questionId);
+    formData.append("content", mergedContent ?? "");
+    formData.append("questionType", mergedType);
+    formData.append("score", (mergedScore ?? 0.25).toString());
+    formData.append("position", (mergedPosition ?? 1).toString());
 
-      if (mergedRawAns !== undefined && mergedRawAns !== null) {
-        formData.append("correctAnswerRaw", mergedRawAns);
-      }
-      formData.append("tolerance", (mergedTol ?? 0).toString());
+    if (mergedRawAns !== undefined && mergedRawAns !== null) {
+      formData.append("correctAnswerRaw", mergedRawAns);
+    }
+    formData.append("tolerance", (mergedTol ?? 0).toString());
 
-      if (mergedExplanation) formData.append("explanation", mergedExplanation);
-      if (mergedImagePath) formData.append("imagePath", mergedImagePath);
-      formData.append("isActive", mergedIsActive ? "on" : "off");
+    if (mergedExplanation !== undefined && mergedExplanation !== null) {
+      formData.append("explanation", mergedExplanation);
+    }
+    if (mergedImagePath !== undefined && mergedImagePath !== null) {
+      formData.append("imagePath", mergedImagePath);
+    }
+    formData.append("isActive", mergedIsActive ? "on" : "off");
 
-      await saveQuestionAction({ ok: true, message: "" }, formData);
+    const res = await saveQuestionAction({ ok: true, message: "" }, formData);
+    if (!res.ok) {
+      toast.error(res.message || "Không thể lưu câu hỏi.");
+      throw new Error(res.message || "Lỗi lưu câu hỏi");
+    }
+
+    startTransition(() => {
       router.refresh();
     });
   };

@@ -196,9 +196,6 @@ export function ExamPreviewModal({ exam, sections }: ExamPreviewModalProps) {
                                   <Calculator className="h-4 w-4" />
                                   Đáp án mẫu: <span className="font-mono text-sm">{question.correct_answer_raw || "Chưa có"}</span>
                                 </span>
-                                <span className="text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 font-semibold px-2 py-0.5 rounded border border-emerald-500/20">
-                                  Khớp chính xác 100%
-                                </span>
                               </div>
                             )}
 

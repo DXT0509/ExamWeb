@@ -42,13 +42,11 @@ describe("Exam Templates & Scaffolding", () => {
     expect(questions).toHaveLength(50);
 
 
-    const part1 = questions.slice(0, 35);
-    expect(part1.every((q) => q.question_type === "multiple_choice")).toBe(true);
-    expect(part1.every((q) => q.score === 1.0)).toBe(true);
-
-    const part2 = questions.slice(35, 50);
-    expect(part2.every((q) => q.question_type === "short_answer")).toBe(true);
-    expect(part2.every((q) => q.score === 1.0)).toBe(true);
+    // Initially all 50 questions are multiple choice (1.0 pt each, 4 options),
+    // and can be toggled to short answer as needed by admin
+    expect(questions.every((q) => q.question_type === "multiple_choice")).toBe(true);
+    expect(questions.every((q) => q.score === 1.0)).toBe(true);
+    expect(questions.every((q) => q.options.length === 4)).toBe(true);
   });
 
   it("resolves template config safely", () => {

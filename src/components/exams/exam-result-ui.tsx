@@ -471,14 +471,9 @@ export function ExamResultUI({ result }: ExamResultUIProps) {
                         </div>
                         <div>
                           <span className="text-xs text-[var(--muted-foreground)] block">Đáp án chuẩn:</span>
-                          <div className="flex items-center gap-2">
-                            <span className="text-base font-bold font-mono text-emerald-600 dark:text-emerald-400">
-                              {q.correct_answer_raw || "—"}
-                            </span>
-                            <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
-                              Khớp chính xác 100%
-                            </span>
-                          </div>
+                          <span className="text-base font-bold font-mono text-emerald-600 dark:text-emerald-400">
+                            {q.correct_answer_raw || "—"}
+                          </span>
                         </div>
                       </div>
                     </div>

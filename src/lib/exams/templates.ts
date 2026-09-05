@@ -97,15 +97,15 @@ export const EXAM_TEMPLATES: Record<string, ExamTemplateConfig> = {
     key: "hsa_math_2026",
     name: "Toán HSA 2026 — Phần Toán học & Xử lý số liệu",
     description:
-      "Cấu trúc HSA ĐHQGHN 2026: 35 câu trắc nghiệm 4 lựa chọn + 15 câu điền đáp án ngắn — Thời gian 75 phút.",
+      "Cấu trúc HSA ĐHQGHN 2026: 50 câu (khởi tạo 50 câu trắc nghiệm, linh hoạt chuyển đổi sang điền đáp án ngắn) — Thời gian 75 phút.",
     defaultDurationMinutes: 75,
     defaultTotalScore: 50,
     scoringStrategy: "hsa_math_2026",
     generateQuestions: () => {
       const questions: ScaffoldedQuestion[] = [];
 
-      // Câu 1 -> Câu 35: Multiple Choice 4 lựa chọn
-      for (let i = 1; i <= 35; i++) {
+      // Tạo sẵn 50 câu full trắc nghiệm 4 lựa chọn, admin có thể chuyển đổi linh hoạt từng câu sang trả lời ngắn và ngược lại
+      for (let i = 1; i <= 50; i++) {
         questions.push({
           position: i,
           content: "",
@@ -117,19 +117,6 @@ export const EXAM_TEMPLATES: Record<string, ExamTemplateConfig> = {
             { content: "", position: 3, is_correct: false },
             { content: "", position: 4, is_correct: false },
           ],
-        });
-      }
-
-      // Câu 36 -> Câu 50: Short Answer (Điền đáp án)
-      for (let i = 36; i <= 50; i++) {
-        questions.push({
-          position: i,
-          content: "",
-          question_type: "short_answer",
-          score: 1.0,
-          correct_answer_raw: "",
-          tolerance: 0,
-          options: [],
         });
       }
 
@@ -156,7 +143,7 @@ export const TEMPLATE_OPTIONS = [
   },
   {
     key: "hsa_math_2026",
-    name: "Toán HSA 2026 — Phần Toán học & Xử lý số liệu (35 trắc nghiệm, 15 điền đáp án — 75 phút)",
+    name: "Toán HSA 2026 — Phần Toán học & Xử lý số liệu (50 câu trắc nghiệm & điền đáp án linh hoạt — 75 phút)",
     duration: 75,
   },
   {

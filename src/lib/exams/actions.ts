@@ -301,6 +301,23 @@ export async function saveQuestionAction(_state: ActionState, formData: FormData
     };
     const result = await supabase.from("questions").update(payload).eq("id", id);
     if (result.error) return { ok: false, message: getDatabaseErrorMessage(result.error) };
+
+    // Nếu chuyển sang multiple_choice mà chưa có phương án nào thì tự động tạo sẵn 4 phương án A, B, C, D
+    if (parsed.data.questionType === "multiple_choice" || parsed.data.questionType === "regular") {
+      const { data: existingOpts } = await supabase
+        .from("question_options")
+        .select("id")
+        .eq("question_id", id)
+        .is("deleted_at", null);
+      if (!existingOpts || existingOpts.length === 0) {
+        await supabase.from("question_options").insert([
+          { question_id: id, content: "Phương án A", position: 1, is_correct: true, is_active: true },
+          { question_id: id, content: "Phương án B", position: 2, is_correct: false, is_active: true },
+          { question_id: id, content: "Phương án C", position: 3, is_correct: false, is_active: true },
+          { question_id: id, content: "Phương án D", position: 4, is_correct: false, is_active: true },
+        ]);
+      }
+    }
   } else {
     const { data: maxQ } = await supabase
       .from("questions")

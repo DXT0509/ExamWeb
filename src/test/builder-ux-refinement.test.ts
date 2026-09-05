@@ -32,7 +32,7 @@ describe("Exam Builder UX Refinement & Template Fixed Logic", () => {
     expect(questions.slice(16, 22).every((q) => q.question_type === "short_answer" && q.score === 0.5)).toBe(true);
   });
 
-  it("verifies HSA 2026 template has fixed question scores and types", () => {
+  it("verifies HSA 2026 template has 50 questions initially as multiple choice with 1.0 pt each", () => {
     const hsa = EXAM_TEMPLATES.hsa_math_2026!;
     expect(hsa.key).toBe("hsa_math_2026");
     expect(hsa.defaultDurationMinutes).toBe(75);
@@ -41,10 +41,9 @@ describe("Exam Builder UX Refinement & Template Fixed Logic", () => {
     const questions = hsa.generateQuestions();
     expect(questions).toHaveLength(50);
 
-    // 35 Multiple choice at 1.0 pt
-    expect(questions.slice(0, 35).every((q) => q.question_type === "multiple_choice" && q.score === 1.0)).toBe(true);
-    // 15 Short answer at 1.0 pt
-    expect(questions.slice(35, 50).every((q) => q.question_type === "short_answer" && q.score === 1.0)).toBe(true);
+    // All 50 questions initially multiple choice at 1.0 pt, with 4 options each
+    expect(questions.every((q) => q.question_type === "multiple_choice" && q.score === 1.0)).toBe(true);
+    expect(questions.every((q) => q.options.length === 4)).toBe(true);
   });
 
   it("verifies exact string match behavior for Short Answer questions", () => {

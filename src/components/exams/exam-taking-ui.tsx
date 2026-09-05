@@ -621,10 +621,6 @@ export function ExamTakingUI({ initialPayload }: ExamTakingUIProps) {
                     <label className="block text-sm font-semibold text-[var(--foreground)]">
                       Nhập câu trả lời của bạn:
                     </label>
-                    <span className="inline-flex items-center gap-1 rounded-lg bg-blue-500/10 px-2.5 py-1 text-xs font-semibold text-blue-700 dark:text-blue-300 border border-blue-500/20">
-                      <Check className="h-3.5 w-3.5 stroke-[2.5]" />
-                      Yêu cầu: Khớp chính xác 100% đáp án
-                    </span>
                   </div>
                   <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
                     <div className="relative w-full max-w-sm">
@@ -637,12 +633,17 @@ export function ExamTakingUI({ initialPayload }: ExamTakingUIProps) {
                       />
                     </div>
                   </div>
-                  <p className="text-xs text-[var(--muted-foreground)] flex items-center gap-1.5 pt-1">
-                    <Info className="h-3.5 w-3.5 text-blue-500 shrink-0" />
-                    <span>
-                      Hệ thống so khớp chính xác 100% từng ký tự chuỗi câu trả lời với đáp án chuẩn của đề thi.
-                    </span>
-                  </p>
+                  <div className="text-xs text-[var(--muted-foreground)] flex items-start gap-2 pt-1 bg-blue-500/5 border border-blue-500/15 rounded-xl p-3">
+                    <Info className="h-4 w-4 text-blue-500 shrink-0 mt-0.5" />
+                    <div className="space-y-1 leading-relaxed">
+                      <p className="text-[var(--foreground)] font-medium">
+                        Không cần thiết phải điền đủ 4 ký tự, đáp án là số thập phân thì viết dấu &ldquo;,&rdquo; không dùng dấu &ldquo;.&rdquo;
+                      </p>
+                      <p className="text-[var(--muted-foreground)]">
+                        Ví dụ: Đáp án là &ldquo;âm một phẩy năm&rdquo; thì trả lời là <strong className="text-[var(--foreground)] font-mono">-1,5</strong> (không được trả lời là -3/2 hay -1.5)
+                      </p>
+                    </div>
+                  </div>
                 </div>
               )}
             </CardContent>

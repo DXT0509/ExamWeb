@@ -239,18 +239,20 @@ export class HSAMath2026ScoringStrategy implements ScoringStrategy {
     const mcqs = questions.filter((q) => (q.question_type || "multiple_choice") === "multiple_choice");
     const shorts = questions.filter((q) => q.question_type === "short_answer");
 
-    if (mcqs.length !== 35) {
-      warnings.push(`Phần trắc nghiệm 4 lựa chọn: hiện có ${mcqs.length}/35 câu.`);
-    }
-    if (shorts.length !== 15) {
-      warnings.push(`Phần điền đáp án ngắn: hiện có ${shorts.length}/15 câu.`);
-    }
     if (questions.length !== 50) {
       warnings.push(`Tổng số câu hỏi hiện là ${questions.length}/50 câu.`);
     }
+    if (mcqs.length + shorts.length !== questions.length) {
+      warnings.push("Đề thi HSA 2026 chỉ gồm 2 dạng: Trắc nghiệm 4 lựa chọn và Điền đáp án ngắn.");
+    }
+    if (mcqs.length !== 35 || shorts.length !== 15) {
+      warnings.push(
+        `Cơ cấu tiêu chuẩn HSA: 35 câu trắc nghiệm và 15 câu điền đáp án (Hiện có: ${mcqs.length} trắc nghiệm, ${shorts.length} điền đáp án).`
+      );
+    }
 
     return {
-      isValid: warnings.length === 0,
+      isValid: questions.length === 50 && mcqs.length + shorts.length === 50,
       warnings,
     };
   }

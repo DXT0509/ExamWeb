@@ -18,6 +18,7 @@ import {
   Calculator,
   Info,
   Clipboard,
+  ArrowLeftRight,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -52,6 +53,7 @@ interface BuilderQuestionCardProps {
   totalQuestions: number;
   readOnly: boolean;
   isTemplateFixed?: boolean;
+  examTemplate?: string;
   onUpdateQuestion: (payload: Partial<QuestionData>) => Promise<void> | void;
   onDeleteQuestion: (id: string) => Promise<void> | void;
   onAddOption: (questionId: string) => Promise<void> | void;
@@ -67,6 +69,7 @@ export function BuilderQuestionCard({
   totalQuestions,
   readOnly,
   isTemplateFixed = false,
+  examTemplate = "custom",
   onUpdateQuestion,
   onDeleteQuestion,
   onAddOption,
@@ -203,12 +206,18 @@ export function BuilderQuestionCard({
 
       await onUpdateQuestion({
         content: trimmedContent,
-        score: isTemplateFixed
+        score: customPayload?.score !== undefined
+          ? customPayload.score
+          : isTemplateFixed
           ? question.score
           : isNaN(numScore) || numScore <= 0
           ? 1
           : numScore,
-        question_type: isTemplateFixed ? question.question_type : currentType,
+        question_type: customPayload?.question_type !== undefined
+          ? customPayload.question_type
+          : isTemplateFixed
+          ? question.question_type
+          : currentType,
         explanation: currentExp?.trim() ? currentExp.trim() : null,
         image_path: currentImg?.trim() ? currentImg.trim() : null,
         ...customPayload,
@@ -287,6 +296,28 @@ export function BuilderQuestionCard({
     }
     await triggerAutoSaveAnswer();
     setEditingMode("none");
+  };
+
+  const handleToggleQuestionType = async () => {
+    if (readOnly) return;
+    const newType = isShortAnswer ? "multiple_choice" : "short_answer";
+    setQuestionType(newType);
+    latestValuesRef.current.questionType = newType;
+
+    const newScore = examTemplate === "hsa_math_2026" ? 1.0 : (parseFloat(score) || 1.0);
+    setScore(newScore.toString());
+    latestValuesRef.current.score = newScore.toString();
+
+    await triggerAutoSave({
+      question_type: newType,
+      score: newScore,
+    });
+
+    toast.success(
+      newType === "short_answer"
+        ? `Câu ${questionIndex + 1}: Đã chuyển sang dạng Điền đáp án ngắn`
+        : `Câu ${questionIndex + 1}: Đã chuyển sang dạng Trắc nghiệm 4 lựa chọn`
+    );
   };
 
   // Click outside / Focus outside auto-complete
@@ -513,6 +544,8 @@ export function BuilderQuestionCard({
     setEditingMode("none");
   };
 
+  const canToggleType = !readOnly && (!isTemplateFixed || examTemplate === "hsa_math_2026");
+
   const getTypeLabel = (type: string) => {
     switch (type) {
       case "true_false_group":
@@ -613,6 +646,37 @@ export function BuilderQuestionCard({
 
           {!readOnly && (
             <>
+              {/* Toggle Question Type Button */}
+              {canToggleType && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleToggleQuestionType}
+                  className={cn(
+                    "h-8 text-xs border-[var(--border)] rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer",
+                    question.question_type === "short_answer"
+                      ? "bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-500/20 border-indigo-500/30"
+                      : "bg-blue-500/10 text-blue-700 dark:text-blue-300 hover:bg-blue-500/20 border-blue-500/30"
+                  )}
+                  title={
+                    question.question_type === "short_answer"
+                      ? "Chuyển câu hỏi này sang dạng Trắc nghiệm"
+                      : "Chuyển câu hỏi này sang dạng Trả lời ngắn"
+                  }
+                >
+                  <ArrowLeftRight className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">
+                    {question.question_type === "short_answer"
+                      ? "Đổi sang Trắc nghiệm"
+                      : "Đổi sang Trả lời ngắn"}
+                  </span>
+                  <span className="sm:hidden">
+                    {question.question_type === "short_answer" ? "Trắc nghiệm" : "Trả lời ngắn"}
+                  </span>
+                </Button>
+              )}
+
               {/* Quick Edit Question Content Button in Header */}
               {editingMode !== "content" && (
                 <Button
@@ -678,6 +742,23 @@ export function BuilderQuestionCard({
                       <Pencil className="h-3.5 w-3.5" />
                       <span>Chỉnh sửa nội dung câu</span>
                     </button>
+                    {canToggleType && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowMenu(false);
+                          handleToggleQuestionType();
+                        }}
+                        className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-[var(--foreground)] hover:bg-[var(--surface-hover)] transition-colors"
+                      >
+                        <ArrowLeftRight className="h-3.5 w-3.5" />
+                        <span>
+                          {question.question_type === "short_answer"
+                            ? "Đổi sang Trắc nghiệm"
+                            : "Đổi sang Trả lời ngắn"}
+                        </span>
+                      </button>
+                    )}
                     {isShortAnswer && (
                       <button
                         type="button"
@@ -764,46 +845,56 @@ export function BuilderQuestionCard({
               </div>
             </div>
 
-            {/* Custom Exam Only: Allow changing Question Type and Score */}
-            {!isTemplateFixed && (
+            {/* Question Type and Score Settings */}
+            {(!isTemplateFixed || examTemplate === "hsa_math_2026") && (
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                <label className="block text-xs font-semibold text-[var(--foreground)] sm:col-span-2">
+                <label className={cn("block text-xs font-semibold text-[var(--foreground)]", examTemplate === "hsa_math_2026" ? "sm:col-span-3" : "sm:col-span-2")}>
                   Dạng câu hỏi
                   <select
                     value={questionType}
                     onChange={(e) => {
                       const newType = e.target.value;
                       setQuestionType(newType);
+                      latestValuesRef.current.questionType = newType;
                       let newScore = score;
-                      if (newType === "true_false_group") newScore = "1.0";
-                      else if (newType === "short_answer") newScore = "0.5";
-                      else newScore = "0.25";
+                      if (examTemplate === "hsa_math_2026") {
+                        newScore = "1.0";
+                      } else {
+                        if (newType === "true_false_group") newScore = "1.0";
+                        else if (newType === "short_answer") newScore = "0.5";
+                        else newScore = "0.25";
+                      }
                       setScore(newScore);
+                      latestValuesRef.current.score = newScore;
                       triggerAutoSave({ question_type: newType, score: parseFloat(newScore) });
                     }}
                     className="mt-1 h-10 w-full rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 text-sm text-[var(--foreground)] font-medium transition-colors focus:border-[var(--primary)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)]/20"
                   >
                     <option value="multiple_choice">Trắc nghiệm 4 lựa chọn (Chọn 1 đáp án đúng)</option>
-                    <option value="true_false_group">Chùm câu hỏi Đúng / Sai (4 ý a, b, c, d)</option>
+                    {examTemplate !== "hsa_math_2026" && (
+                      <option value="true_false_group">Chùm câu hỏi Đúng / Sai (4 ý a, b, c, d)</option>
+                    )}
                     <option value="short_answer">Trả lời ngắn (Điền số / Phân số)</option>
                   </select>
                 </label>
 
-                <label className="block text-xs font-semibold text-[var(--foreground)]">
-                  Điểm số câu
-                  <Input
-                    type="number"
-                    step="0.05"
-                    min="0.05"
-                    value={score}
-                    onChange={(e) => {
-                      setScore(e.target.value);
-                      debouncedAutoSave();
-                    }}
-                    onBlur={() => triggerAutoSave()}
-                    className="mt-1"
-                  />
-                </label>
+                {examTemplate !== "hsa_math_2026" && (
+                  <label className="block text-xs font-semibold text-[var(--foreground)]">
+                    Điểm số câu
+                    <Input
+                      type="number"
+                      step="0.05"
+                      min="0.05"
+                      value={score}
+                      onChange={(e) => {
+                        setScore(e.target.value);
+                        debouncedAutoSave();
+                      }}
+                      onBlur={() => triggerAutoSave()}
+                      className="mt-1"
+                    />
+                  </label>
+                )}
               </div>
             )}
 
@@ -1287,15 +1378,15 @@ export function BuilderQuestionCard({
                 <div className="flex items-center justify-between border-b border-blue-500/20 pb-2">
                   <span className="text-xs font-bold uppercase tracking-wider text-blue-700 dark:text-blue-300 flex items-center gap-1.5">
                     <Calculator className="h-4 w-4" />
-                    Chỉnh sửa đáp án chuẩn (So khớp chính xác 100%)
+                    Chỉnh sửa đáp án chuẩn
                   </span>
                 </div>
 
                 <div className="space-y-3">
                   <label className="block text-xs font-semibold text-[var(--foreground)]">
-                    Đáp án chuẩn của câu hỏi (Học sinh phải nhập chuẩn 100% từng ký tự)
+                    Đáp án chuẩn của câu hỏi
                     <Input
-                      placeholder="Nhập chính xác chuỗi đáp án (VD: 1/2, 0.5, -3, a = 5...)"
+                      placeholder="Nhập chính xác chuỗi đáp án (VD: 1,5 hoặc -1,5 hoặc 4...)"
                       value={correctAnswerRaw}
                       onChange={(e) => {
                         setCorrectAnswerRaw(e.target.value);
@@ -1312,16 +1403,16 @@ export function BuilderQuestionCard({
                 <div className="rounded-xl border border-blue-500/20 bg-[var(--card)] p-3.5 text-xs text-[var(--foreground)] space-y-2">
                   <div className="flex items-start gap-2 text-blue-700 dark:text-blue-300 font-semibold">
                     <Info className="h-4 w-4 shrink-0 mt-0.5" />
-                    <span>Quy tắc chấm điểm câu hỏi ngắn (So sánh 2 xâu ký tự):</span>
+                    <span>Hướng dẫn định dạng đáp án ngắn:</span>
                   </div>
-                  <ul className="list-disc pl-5 space-y-1 text-xs text-[var(--muted-foreground)]">
-                    <li>
-                      <strong className="text-[var(--foreground)]">Yêu cầu chuẩn xác 100%:</strong> Học sinh phải nhập đáp án hoàn toàn trùng khớp từng ký tự với đáp án chuẩn do giáo viên/admin quy định (hệ thống tự động cắt bỏ khoảng trắng thừa ở đầu và cuối chuỗi).
-                    </li>
-                    <li>
-                      <em>Ví dụ: Nếu đáp án chuẩn là <code className="text-blue-600 dark:text-blue-400 font-mono">1/2</code>, học sinh cần nhập đúng <code className="font-mono">1/2</code>. Nếu đáp án chuẩn là <code className="text-blue-600 dark:text-blue-400 font-mono">0.5</code>, học sinh cần nhập đúng <code className="font-mono">0.5</code>.</em>
-                    </li>
-                  </ul>
+                  <div className="space-y-1.5 text-xs text-[var(--muted-foreground)] pl-6">
+                    <p className="text-[var(--foreground)] font-medium">
+                      Không cần thiết phải điền đủ 4 ký tự, đáp án là số thập phân thì viết dấu &ldquo;,&rdquo; không dùng dấu &ldquo;.&rdquo;
+                    </p>
+                    <p>
+                      Ví dụ: Đáp án là &ldquo;âm một phẩy năm&rdquo; thì trả lời là <strong className="text-[var(--foreground)] font-mono">-1,5</strong> (không được trả lời là -3/2 hay -1.5)
+                    </p>
+                  </div>
                 </div>
 
                 <div className="flex items-center justify-between gap-2 pt-2 border-t border-blue-500/20">
@@ -1391,16 +1482,15 @@ export function BuilderQuestionCard({
                     </span>
                   </div>
                   <div>
-                    <span className="text-xs text-[var(--muted-foreground)] block">Quy tắc chấm điểm:</span>
-                    <span className="inline-flex items-center gap-1 rounded-md bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 px-2 py-0.5 text-xs font-semibold border border-emerald-500/20">
-                      <Check className="h-3 w-3 stroke-[2.5]" />
-                      So khớp chính xác 100% chuỗi ký tự
+                    <span className="text-xs text-[var(--muted-foreground)] block">Quy tắc định dạng:</span>
+                    <span className="inline-flex items-center gap-1 rounded-md bg-blue-500/10 text-blue-700 dark:text-blue-300 px-2 py-0.5 text-xs font-semibold border border-blue-500/20">
+                      Số thập phân dùng dấu &ldquo;,&rdquo;
                     </span>
                   </div>
                 </div>
 
-                <p className="text-[11px] text-[var(--muted-foreground)] italic pt-0.5">
-                  ℹ Học sinh phải nhập đáp án hoàn toàn trùng khớp từng ký tự với đáp án chuẩn trên.
+                <p className="text-[11px] text-[var(--muted-foreground)] pt-0.5">
+                  ℹ Không cần thiết phải điền đủ 4 ký tự, đáp án là số thập phân viết dấu &ldquo;,&rdquo; (VD: -1,5 thay vì -1.5).
                 </p>
               </div>
             )}

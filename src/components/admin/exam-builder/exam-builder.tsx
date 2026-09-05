@@ -124,7 +124,8 @@ export function ExamBuilder({
   const isClosed = exam.status === "closed";
   const isArchived = exam.status === "archived";
   const readOnly = !isDraft;
-  const isTemplateFixed =
+  const isTemplateFixed = exam.exam_template === "thpt_math_2026";
+  const isPreScaffoldedTemplate =
     exam.exam_template === "thpt_math_2026" || exam.exam_template === "hsa_math_2026";
 
   // Flatten questions from sections for seamless direct Question-first workflow
@@ -783,6 +784,7 @@ export function ExamBuilder({
             totalQuestions={allQuestions.length}
             readOnly={readOnly}
             isTemplateFixed={isTemplateFixed}
+            examTemplate={exam.exam_template}
             onUpdateQuestion={(payload) => handleUpdateQuestion(question.id, payload)}
             onDeleteQuestion={handleDeleteQuestion}
             onAddOption={handleAddOption}
@@ -799,7 +801,7 @@ export function ExamBuilder({
         ))}
 
         {/* Quick Add Question Button - Shown only for Custom Exams */}
-        {!readOnly && !isTemplateFixed && (
+        {!readOnly && !isPreScaffoldedTemplate && (
           <div className="pt-2 relative">
             <div className="flex gap-2">
               <button

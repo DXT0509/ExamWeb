@@ -86,23 +86,6 @@ export function BuilderQuestionCard({
 
   // Separate editing states: "none" | "content" | "answer"
   const [editingMode, setEditingMode] = useState<"none" | "content" | "answer">("none");
-
-  if (prevQuestion !== question) {
-    setPrevQuestion(question);
-    const isDifferentQuestion = prevQuestion.id !== question.id;
-    if (isDifferentQuestion || editingMode !== "content") {
-      setContent(question.content);
-      setScore(question.score.toString());
-      setQuestionType(question.question_type || "multiple_choice");
-      setExplanation(question.explanation ?? "");
-      setImagePath(question.image_path ?? "");
-    }
-    if (isDifferentQuestion || editingMode !== "answer") {
-      setCorrectAnswerRaw(question.correct_answer_raw ?? "");
-      setTolerance((question.tolerance ?? 0).toString());
-    }
-  }
-
   const [showExplanation, setShowExplanation] = useState(Boolean(question.explanation));
   const [showImageField, setShowImageField] = useState(Boolean(question.image_path));
   const [showMenu, setShowMenu] = useState(false);
@@ -128,6 +111,44 @@ export function BuilderQuestionCard({
     correctAnswerRaw,
     tolerance,
   });
+
+  if (prevQuestion !== question) {
+    setPrevQuestion(question);
+    const isDifferentQuestion = prevQuestion.id !== question.id;
+    if (isDifferentQuestion) {
+      setContent(question.content);
+      setScore(question.score.toString());
+      setQuestionType(question.question_type || "multiple_choice");
+      setExplanation(question.explanation ?? "");
+      setImagePath(question.image_path ?? "");
+      setShowImageField(Boolean(question.image_path));
+      latestValuesRef.current.imagePath = question.image_path ?? "";
+      latestValuesRef.current.content = question.content;
+      setCorrectAnswerRaw(question.correct_answer_raw ?? "");
+      setTolerance((question.tolerance ?? 0).toString());
+    } else {
+      // Same question updated from parent
+      if (editingMode !== "content") {
+        if (question.content !== undefined && question.content !== "Nhập câu hỏi") {
+          setContent(question.content);
+          latestValuesRef.current.content = question.content;
+        }
+        setScore(question.score.toString());
+        setQuestionType(question.question_type || "multiple_choice");
+        setExplanation(question.explanation ?? "");
+        // Only update imagePath from question if it's non-empty or if local imagePath is empty
+        if (question.image_path) {
+          setImagePath(question.image_path);
+          latestValuesRef.current.imagePath = question.image_path;
+          setShowImageField(true);
+        }
+      }
+      if (editingMode !== "answer") {
+        setCorrectAnswerRaw(question.correct_answer_raw ?? "");
+        setTolerance((question.tolerance ?? 0).toString());
+      }
+    }
+  }
 
   useEffect(() => {
     latestValuesRef.current = {
@@ -163,7 +184,7 @@ export function BuilderQuestionCard({
       const currentImg =
         customPayload?.image_path !== undefined
           ? customPayload.image_path
-          : latestValuesRef.current.imagePath;
+          : (latestValuesRef.current.imagePath || imagePath);
       const currentExp =
         customPayload?.explanation !== undefined
           ? customPayload.explanation
@@ -172,6 +193,10 @@ export function BuilderQuestionCard({
         customPayload?.question_type !== undefined
           ? customPayload.question_type
           : latestValuesRef.current.questionType;
+
+      if (customPayload?.image_path !== undefined) {
+        latestValuesRef.current.imagePath = customPayload.image_path ?? "";
+      }
 
       await onUpdateQuestion({
         content: trimmedContent,
@@ -208,8 +233,15 @@ export function BuilderQuestionCard({
   const handleFinishEditing = async () => {
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current);
+      saveTimeoutRef.current = null;
     }
-    await triggerAutoSave();
+    const finalContent = content.trim() === "Nhập câu hỏi" ? "" : content.trim();
+    const activeImg = (imagePath || latestValuesRef.current.imagePath).trim();
+    await triggerAutoSave({
+      content: finalContent,
+      image_path: activeImg ? activeImg : null,
+      explanation: explanation.trim() ? explanation.trim() : null,
+    });
     setEditingMode("none");
   };
 
@@ -298,10 +330,11 @@ export function BuilderQuestionCard({
       uploadData.append("file", uploadFile);
       const res = await uploadQuestionImageAction(uploadData);
       if (res.ok && res.url) {
-        const currentList = parseQuestionImages(latestValuesRef.current.imagePath);
+        const currentList = parseQuestionImages(latestValuesRef.current.imagePath || imagePath);
         const updatedList = [...currentList, res.url];
         const newImagePath = serializeQuestionImages(updatedList) || "";
         setImagePath(newImagePath);
+        latestValuesRef.current.imagePath = newImagePath;
         toast.success(
           currentList.length > 0
             ? `Đã thêm ảnh thứ ${updatedList.length} thành công!`
@@ -374,10 +407,11 @@ export function BuilderQuestionCard({
   };
 
   const handleRemoveSingleImage = async (indexToRemove: number) => {
-    const currentList = parseQuestionImages(imagePath);
+    const currentList = parseQuestionImages(imagePath || latestValuesRef.current.imagePath);
     const updatedList = currentList.filter((_, idx) => idx !== indexToRemove);
     const newImagePath = serializeQuestionImages(updatedList) || "";
     setImagePath(newImagePath);
+    latestValuesRef.current.imagePath = newImagePath;
     setFileError(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
     await triggerAutoSave({ image_path: newImagePath ? newImagePath : null });
@@ -386,6 +420,7 @@ export function BuilderQuestionCard({
 
   const handleClearAllImages = async () => {
     setImagePath("");
+    latestValuesRef.current.imagePath = "";
     setFileError(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
     await triggerAutoSave({ image_path: null });
@@ -1008,7 +1043,7 @@ export function BuilderQuestionCard({
                   question.content.trim().length > 0 &&
                   question.content !== "Nhập câu hỏi" ? (
                     question.content
-                  ) : question.image_path ? (
+                  ) : (imagePath.trim() || question.image_path) ? (
                     <span className="text-[var(--muted-foreground)] italic font-normal text-xs">
                       [Nội dung câu hỏi bằng hình ảnh]
                     </span>
@@ -1029,7 +1064,8 @@ export function BuilderQuestionCard({
 
             {/* Question Images */}
             {(() => {
-              const images = parseQuestionImages(question.image_path);
+              const activeImagePath = imagePath.trim() ? imagePath.trim() : (question.image_path ?? "");
+              const images = parseQuestionImages(activeImagePath);
               if (images.length === 0) return null;
               return (
                 <div className="mt-3 space-y-3">

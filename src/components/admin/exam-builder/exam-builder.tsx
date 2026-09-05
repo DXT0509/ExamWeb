@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useRef, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -97,6 +97,11 @@ export function ExamBuilder({
     setPrevInitialSections(initialSections);
     setSections(initialSections);
   }
+
+  const latestSectionsRef = useRef(sections);
+  useEffect(() => {
+    latestSectionsRef.current = sections;
+  }, [sections]);
 
   const [transitionDialog, setTransitionDialog] = useState<{
     open: boolean;
@@ -220,17 +225,22 @@ export function ExamBuilder({
     payload: Partial<QuestionData>
   ) => {
     // Optimistic update
-    setSections((prev) =>
-      prev.map((s) => ({
+    setSections((prev) => {
+      const updated = prev.map((s) => ({
         ...s,
         questions: s.questions.map((q) =>
           q.id === questionId ? { ...q, ...payload } : q
         ),
-      }))
-    );
+      }));
+      latestSectionsRef.current = updated;
+      return updated;
+    });
 
     startTransition(async () => {
-      const targetQ = allQuestions.find((q) => q.id === questionId);
+      const allQ = latestSectionsRef.current
+        .filter((s) => !("deleted_at" in s && s.deleted_at))
+        .flatMap((s) => s.questions);
+      const targetQ = allQ.find((q) => q.id === questionId);
       if (!targetQ) return;
 
       const mergedContent = payload.content !== undefined ? payload.content : targetQ.content;

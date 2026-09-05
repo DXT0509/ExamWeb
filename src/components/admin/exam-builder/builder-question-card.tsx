@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import {
   Image as ImageIcon,
   HelpCircle,
@@ -83,19 +83,25 @@ export function BuilderQuestionCard({
   const [explanation, setExplanation] = useState(question.explanation ?? "");
   const [imagePath, setImagePath] = useState(question.image_path ?? "");
 
-  if (prevQuestion !== question) {
-    setPrevQuestion(question);
-    setContent(question.content);
-    setScore(question.score.toString());
-    setQuestionType(question.question_type || "multiple_choice");
-    setCorrectAnswerRaw(question.correct_answer_raw ?? "");
-    setTolerance((question.tolerance ?? 0).toString());
-    setExplanation(question.explanation ?? "");
-    setImagePath(question.image_path ?? "");
-  }
-
   // Separate editing states: "none" | "content" | "answer"
   const [editingMode, setEditingMode] = useState<"none" | "content" | "answer">("none");
+
+  if (prevQuestion !== question) {
+    setPrevQuestion(question);
+    const isDifferentQuestion = prevQuestion.id !== question.id;
+    if (isDifferentQuestion || editingMode !== "content") {
+      setContent(question.content);
+      setScore(question.score.toString());
+      setQuestionType(question.question_type || "multiple_choice");
+      setExplanation(question.explanation ?? "");
+      setImagePath(question.image_path ?? "");
+    }
+    if (isDifferentQuestion || editingMode !== "answer") {
+      setCorrectAnswerRaw(question.correct_answer_raw ?? "");
+      setTolerance((question.tolerance ?? 0).toString());
+    }
+  }
+
   const [showExplanation, setShowExplanation] = useState(Boolean(question.explanation));
   const [showImageField, setShowImageField] = useState(Boolean(question.image_path));
   const [showMenu, setShowMenu] = useState(false);
@@ -108,6 +114,138 @@ export function BuilderQuestionCard({
   const [isDragging, setIsDragging] = useState(false);
   const [fileError, setFileError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Auto-save state and refs
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const latestValuesRef = useRef({
+    content,
+    score,
+    questionType,
+    explanation,
+    imagePath,
+    correctAnswerRaw,
+    tolerance,
+  });
+
+  useEffect(() => {
+    latestValuesRef.current = {
+      content,
+      score,
+      questionType,
+      explanation,
+      imagePath,
+      correctAnswerRaw,
+      tolerance,
+    };
+  }, [content, score, questionType, explanation, imagePath, correctAnswerRaw, tolerance]);
+
+  useEffect(() => {
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const triggerAutoSave = async (customPayload?: Partial<QuestionData>) => {
+    if (readOnly) return;
+    setSaveStatus("saving");
+    try {
+      const numScore = parseFloat(latestValuesRef.current.score);
+      const rawContent =
+        customPayload?.content !== undefined
+          ? customPayload.content
+          : latestValuesRef.current.content;
+      const trimmedContent =
+        rawContent.trim() === "Nhập câu hỏi" ? "" : rawContent.trim();
+      const currentImg =
+        customPayload?.image_path !== undefined
+          ? customPayload.image_path
+          : latestValuesRef.current.imagePath;
+      const currentExp =
+        customPayload?.explanation !== undefined
+          ? customPayload.explanation
+          : latestValuesRef.current.explanation;
+      const currentType =
+        customPayload?.question_type !== undefined
+          ? customPayload.question_type
+          : latestValuesRef.current.questionType;
+
+      await onUpdateQuestion({
+        content: trimmedContent,
+        score: isTemplateFixed
+          ? question.score
+          : isNaN(numScore) || numScore <= 0
+          ? 1
+          : numScore,
+        question_type: isTemplateFixed ? question.question_type : currentType,
+        explanation: currentExp?.trim() ? currentExp.trim() : null,
+        image_path: currentImg?.trim() ? currentImg.trim() : null,
+        ...customPayload,
+      });
+
+      setSaveStatus("saved");
+      setTimeout(() => {
+        setSaveStatus((prev) => (prev === "saved" ? "idle" : prev));
+      }, 2500);
+    } catch {
+      setSaveStatus("error");
+    }
+  };
+
+  const debouncedAutoSave = () => {
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+    setSaveStatus("saving");
+    saveTimeoutRef.current = setTimeout(() => {
+      triggerAutoSave();
+    }, 800);
+  };
+
+  const handleFinishEditing = async () => {
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+    await triggerAutoSave();
+    setEditingMode("none");
+  };
+
+  const triggerAutoSaveAnswer = async () => {
+    if (readOnly) return;
+    setSaveStatus("saving");
+    try {
+      await onUpdateQuestion({
+        correct_answer_raw: latestValuesRef.current.correctAnswerRaw.trim() || null,
+        tolerance: parseFloat(latestValuesRef.current.tolerance) || 0,
+      });
+      setSaveStatus("saved");
+      setTimeout(() => {
+        setSaveStatus((prev) => (prev === "saved" ? "idle" : prev));
+      }, 2500);
+    } catch {
+      setSaveStatus("error");
+    }
+  };
+
+  const debouncedAutoSaveAnswer = () => {
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+    setSaveStatus("saving");
+    saveTimeoutRef.current = setTimeout(() => {
+      triggerAutoSaveAnswer();
+    }, 800);
+  };
+
+  const handleFinishAnswerEditing = async () => {
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+    await triggerAutoSaveAnswer();
+    setEditingMode("none");
+  };
 
   const activeOptions = question.question_options
     .filter((o) => !o.deleted_at)
@@ -161,6 +299,8 @@ export function BuilderQuestionCard({
       if (res.ok && res.url) {
         setImagePath(res.url);
         toast.success("Đã dán và tải ảnh lên thành công!", { id: toastId });
+        // Tự động lưu ngay lập tức
+        await triggerAutoSave({ image_path: res.url });
       } else {
         const errorMsg = res.message || "Không thể tải ảnh lên.";
         setFileError(errorMsg);
@@ -224,10 +364,11 @@ export function BuilderQuestionCard({
     }
   };
 
-  const handleClearImage = () => {
+  const handleClearImage = async () => {
     setImagePath("");
     setFileError(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
+    await triggerAutoSave({ image_path: null });
   };
 
   // State 1: Save Content Only
@@ -370,11 +511,26 @@ export function BuilderQuestionCard({
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={() => setEditingMode(editingMode === "content" ? "none" : "content")}
+                onClick={() => {
+                  if (editingMode === "content") {
+                    handleFinishEditing();
+                  } else {
+                    setEditingMode("content");
+                  }
+                }}
                 className="h-8 text-xs border-[var(--border)] bg-[var(--surface)] text-[var(--foreground)] hover:bg-[var(--surface-hover)] rounded-xl hidden sm:flex items-center gap-1.5"
               >
-                <Pencil className="h-3.5 w-3.5" />
-                <span>Sửa câu hỏi</span>
+                {editingMode === "content" ? (
+                  <>
+                    <Check className="h-3.5 w-3.5 text-emerald-500" />
+                    <span>Xong</span>
+                  </>
+                ) : (
+                  <>
+                    <Pencil className="h-3.5 w-3.5" />
+                    <span>Sửa câu hỏi</span>
+                  </>
+                )}
               </Button>
 
               {/* Menu */}
@@ -486,8 +642,31 @@ export function BuilderQuestionCard({
             <div className="flex items-center justify-between border-b border-[var(--divider)] pb-2">
               <span className="text-xs font-bold uppercase tracking-wider text-[var(--primary)] flex items-center gap-1.5">
                 <Pencil className="h-3.5 w-3.5" />
-                Chỉnh sửa nội dung câu hỏi {questionIndex + 1}
+                Soạn nội dung câu hỏi {questionIndex + 1}
               </span>
+              <div className="flex items-center gap-1.5 text-xs">
+                {saveStatus === "saving" ? (
+                  <span className="inline-flex items-center gap-1.5 text-blue-600 dark:text-blue-400 font-medium animate-pulse">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    Đang tự động lưu...
+                  </span>
+                ) : saveStatus === "saved" ? (
+                  <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-medium">
+                    <Check className="h-3.5 w-3.5 stroke-[2.5]" />
+                    Đã tự động lưu
+                  </span>
+                ) : saveStatus === "error" ? (
+                  <span className="inline-flex items-center gap-1 text-rose-600 dark:text-rose-400 font-medium">
+                    <AlertCircle className="h-3.5 w-3.5" />
+                    Lỗi kết nối khi lưu
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 text-[11px] text-[var(--muted-foreground)]">
+                    <Check className="h-3 w-3 text-emerald-500" />
+                    Tự động lưu khi nhập
+                  </span>
+                )}
+              </div>
             </div>
 
             {/* Custom Exam Only: Allow changing Question Type and Score */}
@@ -500,9 +679,12 @@ export function BuilderQuestionCard({
                     onChange={(e) => {
                       const newType = e.target.value;
                       setQuestionType(newType);
-                      if (newType === "true_false_group") setScore("1.0");
-                      else if (newType === "short_answer") setScore("0.5");
-                      else setScore("0.25");
+                      let newScore = score;
+                      if (newType === "true_false_group") newScore = "1.0";
+                      else if (newType === "short_answer") newScore = "0.5";
+                      else newScore = "0.25";
+                      setScore(newScore);
+                      triggerAutoSave({ question_type: newType, score: parseFloat(newScore) });
                     }}
                     className="mt-1 h-10 w-full rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 text-sm text-[var(--foreground)] font-medium transition-colors focus:border-[var(--primary)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)]/20"
                   >
@@ -519,7 +701,11 @@ export function BuilderQuestionCard({
                     step="0.05"
                     min="0.05"
                     value={score}
-                    onChange={(e) => setScore(e.target.value)}
+                    onChange={(e) => {
+                      setScore(e.target.value);
+                      debouncedAutoSave();
+                    }}
+                    onBlur={() => triggerAutoSave()}
                     className="mt-1"
                   />
                 </label>
@@ -530,7 +716,16 @@ export function BuilderQuestionCard({
               Nội dung câu hỏi
               <textarea
                 value={content === "Nhập câu hỏi" ? "" : content}
-                onChange={(e) => setContent(e.target.value)}
+                onChange={(e) => {
+                  setContent(e.target.value);
+                  debouncedAutoSave();
+                }}
+                onBlur={() => {
+                  if (saveTimeoutRef.current) {
+                    clearTimeout(saveTimeoutRef.current);
+                  }
+                  triggerAutoSave();
+                }}
                 onPaste={handlePasteImage}
                 placeholder={`Nhập nội dung câu hỏi ${questionIndex + 1}...`}
                 rows={3}
@@ -694,7 +889,16 @@ export function BuilderQuestionCard({
                 Lời giải chi tiết
                 <textarea
                   value={explanation}
-                  onChange={(e) => setExplanation(e.target.value)}
+                  onChange={(e) => {
+                    setExplanation(e.target.value);
+                    debouncedAutoSave();
+                  }}
+                  onBlur={() => {
+                    if (saveTimeoutRef.current) {
+                      clearTimeout(saveTimeoutRef.current);
+                    }
+                    triggerAutoSave();
+                  }}
                   placeholder="Giải thích chi tiết phương pháp giải..."
                   rows={2}
                   className="mt-1 w-full rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)] p-3 text-sm text-[var(--foreground)] transition-colors focus:border-[var(--primary)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)]/20"
@@ -702,23 +906,37 @@ export function BuilderQuestionCard({
               </label>
             )}
 
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-[var(--divider)]">
+            <div className="flex items-center justify-between gap-2 pt-2 border-t border-[var(--divider)]">
+              <div className="flex items-center gap-1.5 text-xs">
+                {saveStatus === "saving" ? (
+                  <span className="text-blue-600 dark:text-blue-400 flex items-center gap-1 font-medium animate-pulse">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    Đang tự động lưu...
+                  </span>
+                ) : saveStatus === "saved" ? (
+                  <span className="text-emerald-600 dark:text-emerald-400 flex items-center gap-1 font-medium">
+                    <Check className="h-3.5 w-3.5 stroke-[2.5]" />
+                    Đã tự động lưu
+                  </span>
+                ) : saveStatus === "error" ? (
+                  <span className="text-rose-600 dark:text-rose-400 flex items-center gap-1 font-medium">
+                    <AlertCircle className="h-3.5 w-3.5" />
+                    Lỗi kết nối khi lưu
+                  </span>
+                ) : (
+                  <span className="text-[var(--muted-foreground)] flex items-center gap-1">
+                    <Check className="h-3.5 w-3.5 text-emerald-500" />
+                    Mọi thay đổi tự động lưu
+                  </span>
+                )}
+              </div>
               <Button
                 type="button"
-                variant="ghost"
                 size="sm"
-                onClick={handleCancel}
-                className="rounded-xl text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+                onClick={handleFinishEditing}
+                className="bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white rounded-xl shadow-xs text-xs px-4"
               >
-                Hủy
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                onClick={handleSaveContent}
-                className="bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white rounded-xl shadow-md shadow-blue-600/20"
-              >
-                Lưu câu hỏi
+                Xong
               </Button>
             </div>
           </div>
@@ -942,7 +1160,11 @@ export function BuilderQuestionCard({
                     <Input
                       placeholder="Nhập số hoặc phân số..."
                       value={correctAnswerRaw}
-                      onChange={(e) => setCorrectAnswerRaw(e.target.value)}
+                      onChange={(e) => {
+                        setCorrectAnswerRaw(e.target.value);
+                        debouncedAutoSaveAnswer();
+                      }}
+                      onBlur={() => triggerAutoSaveAnswer()}
                       className="mt-1 bg-[var(--card)] font-mono font-bold text-sm"
                       autoFocus
                     />
@@ -955,7 +1177,11 @@ export function BuilderQuestionCard({
                       step="0.0001"
                       min="0"
                       value={tolerance}
-                      onChange={(e) => setTolerance(e.target.value)}
+                      onChange={(e) => {
+                        setTolerance(e.target.value);
+                        debouncedAutoSaveAnswer();
+                      }}
+                      onBlur={() => triggerAutoSaveAnswer()}
                       className="mt-1 bg-[var(--card)] font-mono text-sm"
                     />
                   </label>
@@ -984,23 +1210,32 @@ export function BuilderQuestionCard({
                   </ul>
                 </div>
 
-                <div className="flex items-center justify-end gap-2 pt-2 border-t border-blue-500/20">
+                <div className="flex items-center justify-between gap-2 pt-2 border-t border-blue-500/20">
+                  <div className="flex items-center gap-1.5 text-xs">
+                    {saveStatus === "saving" ? (
+                      <span className="text-blue-600 dark:text-blue-400 flex items-center gap-1 font-medium animate-pulse">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        Đang tự động lưu...
+                      </span>
+                    ) : saveStatus === "saved" ? (
+                      <span className="text-emerald-600 dark:text-emerald-400 flex items-center gap-1 font-medium">
+                        <Check className="h-3.5 w-3.5 stroke-[2.5]" />
+                        Đã tự động lưu
+                      </span>
+                    ) : (
+                      <span className="text-[var(--muted-foreground)] flex items-center gap-1">
+                        <Check className="h-3.5 w-3.5 text-emerald-500" />
+                        Tự động lưu khi nhập
+                      </span>
+                    )}
+                  </div>
                   <Button
                     type="button"
-                    variant="ghost"
                     size="sm"
-                    onClick={handleCancel}
-                    className="rounded-xl text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+                    onClick={handleFinishAnswerEditing}
+                    className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-xs text-xs px-4"
                   >
-                    Hủy
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    onClick={handleSaveAnswer}
-                    className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-md shadow-blue-600/20"
-                  >
-                    Lưu đáp án
+                    Xong
                   </Button>
                 </div>
               </div>

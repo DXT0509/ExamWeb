@@ -10,6 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { parseQuestionImages } from "@/lib/exams/images";
 import type { SectionData } from "./exam-builder";
 import type { ExamMetaData } from "./meta-settings-modal";
 
@@ -94,15 +95,30 @@ export function ExamPreviewModal({ exam, sections }: ExamPreviewModalProps) {
                               </span>
                             </div>
 
-                            {question.image_path && (
-                              <div className="my-2">
-                                <img
-                                  src={question.image_path}
-                                  alt={`Minh họa câu ${qIndex + 1}`}
-                                  className="max-h-56 rounded-lg border border-[var(--border)] object-contain"
-                                />
-                              </div>
-                            )}
+                            {/* Question Images */}
+                            {(() => {
+                              const images = parseQuestionImages(question.image_path);
+                              if (images.length === 0) return null;
+                              return (
+                                <div className="my-2 space-y-2">
+                                  {images.map((imgUrl, imgIdx) => (
+                                    <div key={imgIdx} className="overflow-hidden rounded-lg border border-[var(--border)] p-1 bg-[var(--surface)]">
+                                      {images.length > 1 && (
+                                        <div className="text-[10px] font-semibold text-[var(--muted-foreground)] px-1 mb-1">
+                                          Hình {imgIdx + 1} / {images.length}
+                                        </div>
+                                      )}
+                                      <img
+                                        src={imgUrl}
+                                        alt={`Minh họa câu ${qIndex + 1}${images.length > 1 ? ` (Ảnh ${imgIdx + 1})` : ""}`}
+                                        className="w-full max-w-2xl h-auto rounded-md object-contain mx-auto"
+                                        loading="lazy"
+                                      />
+                                    </div>
+                                  ))}
+                                </div>
+                              );
+                            })()}
 
                             {/* Multiple Choice Preview */}
                             {!isTf && !isShort && (
@@ -180,15 +196,9 @@ export function ExamPreviewModal({ exam, sections }: ExamPreviewModalProps) {
                                   <Calculator className="h-4 w-4" />
                                   Đáp án mẫu: <span className="font-mono text-sm">{question.correct_answer_raw || "Chưa có"}</span>
                                 </span>
-                                {question.tolerance !== undefined && question.tolerance !== null && question.tolerance > 0 ? (
-                                  <span className="font-mono text-blue-700 dark:text-blue-300 bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20">
-                                    Sai số: ± {question.tolerance}
-                                  </span>
-                                ) : (
-                                  <span className="text-[var(--muted-foreground)] bg-[var(--surface-hover)] px-2 py-0.5 rounded border border-[var(--border)]">
-                                    Sai số: Không cho phép (± 0)
-                                  </span>
-                                )}
+                                <span className="text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 font-semibold px-2 py-0.5 rounded border border-emerald-500/20">
+                                  Khớp chính xác 100%
+                                </span>
                               </div>
                             )}
 

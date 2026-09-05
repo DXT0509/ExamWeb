@@ -39,14 +39,12 @@ export function parseMathValue(raw: string | null | undefined): number | null {
 
 /**
  * Evaluates whether a student's input matches the expected answer.
- * Uses numerical/fraction equivalence when both can be parsed as numbers,
- * with optional tolerance.
- * Falls back to normalized string equality for text-based answers.
+ * Per admin requirement: 100% exact string match between student answer and standard answer.
  */
 export function evaluateMathAnswer(
   studentInput: string | null | undefined,
   expectedAnswer: string | null | undefined,
-  tolerance: number = 0
+  _tolerance: number = 0
 ): boolean {
   if (!studentInput || !expectedAnswer) return false;
 
@@ -55,22 +53,6 @@ export function evaluateMathAnswer(
 
   if (!sTrim || !eTrim) return false;
 
-  // Direct case-insensitive string equality
-  if (sTrim.toLowerCase() === eTrim.toLowerCase()) {
-    return true;
-  }
-
-  const sVal = parseMathValue(sTrim);
-  const eVal = parseMathValue(eTrim);
-
-  // If both are numbers/fractions, compare mathematically
-  if (sVal !== null && eVal !== null) {
-    const effectiveTolerance = Math.max(tolerance, 1e-6);
-    return Math.abs(sVal - eVal) <= effectiveTolerance + 1e-8;
-  }
-
-  // Fallback: Normalized string comparison (strip spaces, lowercase)
-  const normS = sTrim.toLowerCase().replace(/\s+/g, "");
-  const normE = eTrim.toLowerCase().replace(/\s+/g, "");
-  return normS === normE;
+  // Exact 100% string match
+  return sTrim === eTrim;
 }

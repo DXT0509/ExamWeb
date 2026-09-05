@@ -24,6 +24,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { uploadQuestionImageAction } from "@/lib/exams/actions";
+import { parseQuestionImages, serializeQuestionImages } from "@/lib/exams/images";
 import { BuilderOptionItem, type OptionData } from "./builder-option-item";
 import { DeleteConfirmDialog } from "./delete-confirm-dialog";
 import { InsertPlaceholder } from "./insert-placeholder";
@@ -297,10 +298,18 @@ export function BuilderQuestionCard({
       uploadData.append("file", uploadFile);
       const res = await uploadQuestionImageAction(uploadData);
       if (res.ok && res.url) {
-        setImagePath(res.url);
-        toast.success("Đã dán và tải ảnh lên thành công!", { id: toastId });
+        const currentList = parseQuestionImages(latestValuesRef.current.imagePath);
+        const updatedList = [...currentList, res.url];
+        const newImagePath = serializeQuestionImages(updatedList) || "";
+        setImagePath(newImagePath);
+        toast.success(
+          currentList.length > 0
+            ? `Đã thêm ảnh thứ ${updatedList.length} thành công!`
+            : "Đã dán và tải ảnh lên thành công!",
+          { id: toastId }
+        );
         // Tự động lưu ngay lập tức
-        await triggerAutoSave({ image_path: res.url });
+        await triggerAutoSave({ image_path: newImagePath });
       } else {
         const errorMsg = res.message || "Không thể tải ảnh lên.";
         setFileError(errorMsg);
@@ -364,11 +373,23 @@ export function BuilderQuestionCard({
     }
   };
 
-  const handleClearImage = async () => {
+  const handleRemoveSingleImage = async (indexToRemove: number) => {
+    const currentList = parseQuestionImages(imagePath);
+    const updatedList = currentList.filter((_, idx) => idx !== indexToRemove);
+    const newImagePath = serializeQuestionImages(updatedList) || "";
+    setImagePath(newImagePath);
+    setFileError(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+    await triggerAutoSave({ image_path: newImagePath ? newImagePath : null });
+    toast.success("Đã xóa ảnh!");
+  };
+
+  const handleClearAllImages = async () => {
     setImagePath("");
     setFileError(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
     await triggerAutoSave({ image_path: null });
+    toast.success("Đã gỡ tất cả ảnh!");
   };
 
   // State 1: Save Content Only
@@ -772,117 +793,147 @@ export function BuilderQuestionCard({
             </div>
 
             {/* Image Selection / Upload Section */}
-            {showImageField && (
-              <div className="space-y-3 rounded-2xl border border-[var(--border)] p-4 bg-[var(--card-secondary)]">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold text-[var(--foreground)]">
-                    Hình ảnh minh họa cho câu hỏi
-                  </span>
-                  {imagePath && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={handleClearImage}
-                      className="h-6 text-[11px] text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 px-2 rounded-lg"
-                    >
-                      <Trash2 className="h-3 w-3 mr-1" />
-                      Gỡ ảnh
-                    </Button>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-4 text-xs font-medium">
-                  <label className="flex items-center gap-1.5 text-[var(--foreground)] cursor-pointer">
-                    <input
-                      type="radio"
-                      name={`imgSource-${question.id}`}
-                      value="file"
-                      checked={imageSourceType === "file"}
-                      onChange={() => setImageSourceType("file")}
-                      className="h-3.5 w-3.5 text-[var(--primary)] accent-[var(--primary)]"
-                    />
-                    Tải ảnh từ máy tính
-                  </label>
-                  <label className="flex items-center gap-1.5 text-[var(--foreground)] cursor-pointer">
-                    <input
-                      type="radio"
-                      name={`imgSource-${question.id}`}
-                      value="url"
-                      checked={imageSourceType === "url"}
-                      onChange={() => setImageSourceType("url")}
-                      className="h-3.5 w-3.5 text-[var(--primary)] accent-[var(--primary)]"
-                    />
-                    Nhập liên kết hình ảnh (URL)
-                  </label>
-                </div>
-
-                {imageSourceType === "file" ? (
-                  <div className="space-y-2">
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
-                      onChange={handleImageFileChange}
-                      className="hidden"
-                    />
-                    <div className="flex flex-wrap items-center gap-2">
+            {showImageField && (() => {
+              const currentImages = parseQuestionImages(imagePath);
+              return (
+                <div className="space-y-3 rounded-2xl border border-[var(--border)] p-4 bg-[var(--card-secondary)]">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-[var(--foreground)]">
+                      Hình ảnh minh họa cho câu hỏi {currentImages.length > 0 ? `(${currentImages.length} ảnh)` : ""}
+                    </span>
+                    {currentImages.length > 0 && (
                       <Button
                         type="button"
-                        variant="outline"
+                        variant="ghost"
                         size="sm"
-                        disabled={isUploadingImage}
-                        onClick={() => fileInputRef.current?.click()}
-                        className="text-xs border-[var(--border)] bg-[var(--surface)] text-[var(--foreground)] hover:bg-[var(--surface-hover)] rounded-xl"
+                        onClick={handleClearAllImages}
+                        className="h-6 text-[11px] text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 px-2 rounded-lg"
                       >
-                        {isUploadingImage ? (
-                          <>
-                            <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                            Đang tải ảnh lên...
-                          </>
-                        ) : (
-                          <>
-                            <Upload className="mr-1.5 h-3.5 w-3.5" />
-                            {imagePath ? "Chọn ảnh khác từ máy" : "Chọn ảnh từ máy tính"}
-                          </>
-                        )}
+                        <Trash2 className="h-3 w-3 mr-1" />
+                        Gỡ tất cả ảnh
                       </Button>
-                      <span className="text-xs text-[var(--muted-foreground)] inline-flex items-center gap-1">
-                        hoặc dán trực tiếp <kbd className="px-1.5 py-0.5 rounded bg-[var(--surface-hover)] border border-[var(--border)] font-mono text-[10px] text-[var(--foreground)] font-semibold shadow-2xs">Ctrl + V</kbd>
-                      </span>
-                    </div>
-                    {fileError && (
-                      <p className="text-xs text-rose-600 dark:text-rose-400 font-medium">
-                        {fileError}
-                      </p>
                     )}
-                    <p className="text-[11px] text-[var(--muted-foreground)]">
-                      Hỗ trợ định dạng PNG, JPG, WebP, GIF, SVG (dung lượng tối đa 5MB).
-                    </p>
                   </div>
-                ) : (
-                  <div className="space-y-1">
-                    <Input
-                      type="url"
-                      placeholder="https://example.com/hinh-anh.png"
-                      value={imagePath.startsWith("data:") ? "" : imagePath}
-                      onChange={(e) => setImagePath(e.target.value)}
-                      className="text-xs h-9 bg-[var(--input-bg)] border-[var(--input-border)] text-[var(--foreground)]"
-                    />
-                  </div>
-                )}
 
-                {imagePath && (
-                  <div className="mt-2 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-2">
-                    <img
-                      src={imagePath}
-                      alt="Xem trước hình ảnh minh họa"
-                      className="max-h-48 rounded-lg border border-[var(--border)] object-contain bg-[var(--card)]"
-                    />
+                  <div className="flex items-center gap-4 text-xs font-medium">
+                    <label className="flex items-center gap-1.5 text-[var(--foreground)] cursor-pointer">
+                      <input
+                        type="radio"
+                        name={`imgSource-${question.id}`}
+                        value="file"
+                        checked={imageSourceType === "file"}
+                        onChange={() => setImageSourceType("file")}
+                        className="h-3.5 w-3.5 text-[var(--primary)] accent-[var(--primary)]"
+                      />
+                      Tải ảnh từ máy tính / Chụp màn hình
+                    </label>
+                    <label className="flex items-center gap-1.5 text-[var(--foreground)] cursor-pointer">
+                      <input
+                        type="radio"
+                        name={`imgSource-${question.id}`}
+                        value="url"
+                        checked={imageSourceType === "url"}
+                        onChange={() => setImageSourceType("url")}
+                        className="h-3.5 w-3.5 text-[var(--primary)] accent-[var(--primary)]"
+                      />
+                      Nhập liên kết hình ảnh (URL)
+                    </label>
                   </div>
-                )}
-              </div>
-            )}
+
+                  {imageSourceType === "file" ? (
+                    <div className="space-y-2">
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
+                        onChange={handleImageFileChange}
+                        className="hidden"
+                      />
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={isUploadingImage}
+                          onClick={() => fileInputRef.current?.click()}
+                          className="text-xs border-[var(--border)] bg-[var(--surface)] text-[var(--foreground)] hover:bg-[var(--surface-hover)] rounded-xl"
+                        >
+                          {isUploadingImage ? (
+                            <>
+                              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                              Đang tải ảnh lên...
+                            </>
+                          ) : (
+                            <>
+                              <Upload className="mr-1.5 h-3.5 w-3.5" />
+                              {currentImages.length > 0 ? "Thêm ảnh từ máy (+)" : "Chọn ảnh từ máy tính"}
+                            </>
+                          )}
+                        </Button>
+                        <span className="text-xs text-[var(--muted-foreground)] inline-flex items-center gap-1">
+                          hoặc tiếp tục dán <kbd className="px-1.5 py-0.5 rounded bg-[var(--surface-hover)] border border-[var(--border)] font-mono text-[10px] text-[var(--foreground)] font-semibold shadow-2xs">Ctrl + V</kbd> để thêm ảnh tiếp theo
+                        </span>
+                      </div>
+                      {fileError && (
+                        <p className="text-xs text-rose-600 dark:text-rose-400 font-medium">
+                          {fileError}
+                        </p>
+                      )}
+                      <p className="text-[11px] text-[var(--muted-foreground)]">
+                        Hỗ trợ chụp nhiều trang / dán nhiều ảnh liên tiếp cho 1 câu hỏi (PNG, JPG, WebP, GIF - dung lượng tối đa 5MB mỗi ảnh).
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-1">
+                      <textarea
+                        placeholder="Nhập liên kết hình ảnh (nếu có nhiều ảnh, mỗi URL một dòng)..."
+                        value={imagePath.startsWith("data:") ? "" : imagePath}
+                        onChange={(e) => {
+                          setImagePath(e.target.value);
+                          debouncedAutoSave();
+                        }}
+                        onBlur={() => triggerAutoSave()}
+                        rows={2}
+                        className="w-full rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)] p-2.5 text-xs text-[var(--foreground)] font-mono transition-colors focus:border-[var(--primary)] focus:outline-none"
+                      />
+                    </div>
+                  )}
+
+                  {/* List of uploaded images with individual delete buttons */}
+                  {currentImages.length > 0 && (
+                    <div className="mt-3 space-y-3">
+                      {currentImages.map((url, idx) => (
+                        <div
+                          key={idx}
+                          className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-2.5 transition-shadow shadow-xs"
+                        >
+                          <div className="flex items-center justify-between mb-1.5 px-1">
+                            <span className="text-xs font-semibold text-[var(--foreground)] flex items-center gap-1.5">
+                              <span className="inline-block w-1.5 h-1.5 rounded-full bg-[var(--primary)]" />
+                              Ảnh {idx + 1} {currentImages.length > 1 ? `(Trang / Phần ${idx + 1})` : ""}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveSingleImage(idx)}
+                              className="p-1 rounded-md text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 text-xs flex items-center gap-1 transition-colors cursor-pointer"
+                              title={`Xóa ảnh ${idx + 1}`}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                              <span className="text-[11px]">Gỡ ảnh này</span>
+                            </button>
+                          </div>
+                          <img
+                            src={url}
+                            alt={`Xem trước ảnh ${idx + 1}`}
+                            className="w-full max-w-2xl h-auto rounded-lg border border-[var(--border)] object-contain bg-[var(--card)] mx-auto"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             {showExplanation && (
               <label className="block text-xs font-semibold text-[var(--foreground)]">
@@ -976,15 +1027,34 @@ export function BuilderQuestionCard({
               )}
             </div>
 
-            {question.image_path && (
-              <div className="mt-3">
-                <img
-                  src={question.image_path}
-                  alt={`Minh họa câu ${questionIndex + 1}`}
-                  className="max-h-60 rounded-xl border border-[var(--border)] object-contain bg-[var(--surface)] p-1 shadow-xs"
-                />
-              </div>
-            )}
+            {/* Question Images */}
+            {(() => {
+              const images = parseQuestionImages(question.image_path);
+              if (images.length === 0) return null;
+              return (
+                <div className="mt-3 space-y-3">
+                  {images.map((imgUrl, imgIdx) => (
+                    <div
+                      key={imgIdx}
+                      className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)] p-2 shadow-xs"
+                    >
+                      {images.length > 1 && (
+                        <div className="text-[11px] font-semibold text-[var(--muted-foreground)] mb-1 px-1 flex items-center gap-1.5">
+                          <span className="inline-block w-1.5 h-1.5 rounded-full bg-[var(--primary)]" />
+                          <span>Hình ảnh {imgIdx + 1} / {images.length}</span>
+                        </div>
+                      )}
+                      <img
+                        src={imgUrl}
+                        alt={`Minh họa câu ${questionIndex + 1}${images.length > 1 ? ` (Ảnh ${imgIdx + 1})` : ""}`}
+                        className="w-full max-w-2xl h-auto rounded-lg border border-[var(--border)] object-contain bg-[var(--card)] mx-auto"
+                        loading="lazy"
+                      />
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
           </div>
         )}
 
@@ -1150,39 +1220,23 @@ export function BuilderQuestionCard({
                 <div className="flex items-center justify-between border-b border-blue-500/20 pb-2">
                   <span className="text-xs font-bold uppercase tracking-wider text-blue-700 dark:text-blue-300 flex items-center gap-1.5">
                     <Calculator className="h-4 w-4" />
-                    Chỉnh sửa đáp án chuẩn & Sai số
+                    Chỉnh sửa đáp án chuẩn (So khớp chính xác 100%)
                   </span>
                 </div>
 
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="space-y-3">
                   <label className="block text-xs font-semibold text-[var(--foreground)]">
-                    Đáp án chuẩn (VD: 1/2, 0.5, -3, 1.4142)
+                    Đáp án chuẩn của câu hỏi (Học sinh phải nhập chuẩn 100% từng ký tự)
                     <Input
-                      placeholder="Nhập số hoặc phân số..."
+                      placeholder="Nhập chính xác chuỗi đáp án (VD: 1/2, 0.5, -3, a = 5...)"
                       value={correctAnswerRaw}
                       onChange={(e) => {
                         setCorrectAnswerRaw(e.target.value);
                         debouncedAutoSaveAnswer();
                       }}
                       onBlur={() => triggerAutoSaveAnswer()}
-                      className="mt-1 bg-[var(--card)] font-mono font-bold text-sm"
+                      className="mt-1.5 bg-[var(--card)] font-mono font-bold text-base h-11"
                       autoFocus
-                    />
-                  </label>
-
-                  <label className="block text-xs font-semibold text-[var(--foreground)]">
-                    Sai số cho phép (Tolerance)
-                    <Input
-                      type="number"
-                      step="0.0001"
-                      min="0"
-                      value={tolerance}
-                      onChange={(e) => {
-                        setTolerance(e.target.value);
-                        debouncedAutoSaveAnswer();
-                      }}
-                      onBlur={() => triggerAutoSaveAnswer()}
-                      className="mt-1 bg-[var(--card)] font-mono text-sm"
                     />
                   </label>
                 </div>
@@ -1191,21 +1245,14 @@ export function BuilderQuestionCard({
                 <div className="rounded-xl border border-blue-500/20 bg-[var(--card)] p-3.5 text-xs text-[var(--foreground)] space-y-2">
                   <div className="flex items-start gap-2 text-blue-700 dark:text-blue-300 font-semibold">
                     <Info className="h-4 w-4 shrink-0 mt-0.5" />
-                    <span>Hướng dẫn chấm điểm & chuẩn hóa toán học:</span>
+                    <span>Quy tắc chấm điểm câu hỏi ngắn (So sánh 2 xâu ký tự):</span>
                   </div>
                   <ul className="list-disc pl-5 space-y-1 text-xs text-[var(--muted-foreground)]">
                     <li>
-                      <strong className="text-[var(--foreground)]">Sai số cho phép:</strong> Là khoảng chênh lệch tối đa giữa đáp án của học sinh và đáp án đúng.
-                      <br />
-                      <em>Ví dụ: Đáp án đúng là <code className="text-blue-600 dark:text-blue-400 font-mono">1.4142</code>, sai số <code className="text-blue-600 dark:text-blue-400 font-mono">0.001</code> → các giá trị từ <code className="font-mono">1.4132</code> đến <code className="font-mono">1.4152</code> đều được chấm đúng.</em>
+                      <strong className="text-[var(--foreground)]">Yêu cầu chuẩn xác 100%:</strong> Học sinh phải nhập đáp án hoàn toàn trùng khớp từng ký tự với đáp án chuẩn do giáo viên/admin quy định (hệ thống tự động cắt bỏ khoảng trắng thừa ở đầu và cuối chuỗi).
                     </li>
                     <li>
-                      <strong className="text-[var(--foreground)]">Khi sai số = 0:</strong> Hệ thống yêu cầu giá trị toán học phải khớp chính xác (không phân biệt cách viết chuỗi).
-                      <br />
-                      <em>Ví dụ: Đáp án chuẩn là <code className="text-blue-600 dark:text-blue-400 font-mono">1/2</code> thì học sinh nhập <code className="font-mono">0.5</code>, <code className="font-mono">0,5</code> hoặc <code className="font-mono">2/4</code> đều được coi là đúng.</em>
-                    </li>
-                    <li>
-                      <strong className="text-[var(--foreground)]">Số vô tỉ hoặc làm tròn (√2, π, √3/2):</strong> Hãy nhập đáp án dưới dạng số hoặc phân số (VD: <code className="font-mono">1.4142</code> hoặc <code className="font-mono">14142/10000</code>) và đặt một sai số nhỏ như <code className="text-blue-600 dark:text-blue-400 font-mono">0.0001</code> để chấp nhận kết quả làm tròn của học sinh.
+                      <em>Ví dụ: Nếu đáp án chuẩn là <code className="text-blue-600 dark:text-blue-400 font-mono">1/2</code>, học sinh cần nhập đúng <code className="font-mono">1/2</code>. Nếu đáp án chuẩn là <code className="text-blue-600 dark:text-blue-400 font-mono">0.5</code>, học sinh cần nhập đúng <code className="font-mono">0.5</code>.</em>
                     </li>
                   </ul>
                 </div>
@@ -1247,7 +1294,7 @@ export function BuilderQuestionCard({
                   "group/shortAns rounded-2xl border border-blue-500/20 bg-blue-500/5 p-4 space-y-2.5 transition-all duration-200",
                   !readOnly && "cursor-pointer hover:border-blue-500/50 hover:bg-blue-500/10 hover:shadow-xs"
                 )}
-                title={!readOnly ? "Bấm vào ô này để chỉnh sửa đáp án chuẩn & sai số" : undefined}
+                title={!readOnly ? "Bấm vào ô này để chỉnh sửa đáp án chuẩn" : undefined}
               >
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-semibold uppercase tracking-wider text-blue-700 dark:text-blue-300 flex items-center gap-1.5">
@@ -1285,17 +1332,16 @@ export function BuilderQuestionCard({
                     </span>
                   </div>
                   <div>
-                    <span className="text-xs text-[var(--muted-foreground)] block">Sai số cho phép:</span>
-                    <span className="text-sm font-semibold font-mono">
-                      {question.tolerance !== undefined && question.tolerance !== null && question.tolerance > 0
-                        ? `± ${question.tolerance}`
-                        : "Không cho phép (± 0)"}
+                    <span className="text-xs text-[var(--muted-foreground)] block">Quy tắc chấm điểm:</span>
+                    <span className="inline-flex items-center gap-1 rounded-md bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 px-2 py-0.5 text-xs font-semibold border border-emerald-500/20">
+                      <Check className="h-3 w-3 stroke-[2.5]" />
+                      So khớp chính xác 100% chuỗi ký tự
                     </span>
                   </div>
                 </div>
 
                 <p className="text-[11px] text-[var(--muted-foreground)] italic pt-0.5">
-                  ℹ Hệ thống tự động so khớp phân số (1/2 = 0.5 = 2/4), số âm và dấu phẩy thập phân.
+                  ℹ Học sinh phải nhập đáp án hoàn toàn trùng khớp từng ký tự với đáp án chuẩn trên.
                 </p>
               </div>
             )}

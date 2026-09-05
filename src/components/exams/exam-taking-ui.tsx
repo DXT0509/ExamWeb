@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { parseQuestionImages } from "@/lib/exams/images";
 
 import { FullscreenViolationOverlay } from "@/components/exams/fullscreen-violation-overlay";
 import {
@@ -490,16 +491,34 @@ export function ExamTakingUI({ initialPayload }: ExamTakingUIProps) {
                 </div>
               )}
 
-              {/* Question Image if present */}
-              {currentQuestion.image_path && (
-                <div className="my-4 overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--card-secondary)] p-2">
-                  <img
-                    src={currentQuestion.image_path}
-                    alt={`Hình minh họa câu ${currentQuestion.globalIndex}`}
-                    className="max-h-96 object-contain mx-auto rounded-lg"
-                  />
-                </div>
-              )}
+              {/* Question Images if present */}
+              {(() => {
+                const images = parseQuestionImages(currentQuestion.image_path);
+                if (images.length === 0) return null;
+                return (
+                  <div className="my-4 space-y-4">
+                    {images.map((imgUrl, imgIdx) => (
+                      <div
+                        key={imgIdx}
+                        className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--card-secondary)] p-2 sm:p-3 transition-shadow hover:shadow-sm"
+                      >
+                        {images.length > 1 && (
+                          <div className="text-[11px] font-semibold text-[var(--muted-foreground)] mb-1.5 px-1 flex items-center gap-1.5">
+                            <span className="inline-block w-1.5 h-1.5 rounded-full bg-[var(--primary)]" />
+                            <span>Hình ảnh {imgIdx + 1} / {images.length}</span>
+                          </div>
+                        )}
+                        <img
+                          src={imgUrl}
+                          alt={`Hình minh họa câu ${currentQuestion.globalIndex}${images.length > 1 ? ` (Phần ${imgIdx + 1})` : ""}`}
+                          className="w-full max-w-3xl h-auto object-contain mx-auto rounded-lg"
+                          loading="lazy"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
 
               {/* Mode 1: Multiple Choice Options */}
               {isMcq && (
@@ -595,30 +614,23 @@ export function ExamTakingUI({ initialPayload }: ExamTakingUIProps) {
                 </div>
               )}
 
-              {/* Mode 3: Short Answer (Numeric / Fraction / Math Text) */}
+              {/* Mode 3: Short Answer (Exact String Match) */}
               {isShortAnswer && (
                 <div className="space-y-3 pt-2">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <label className="block text-sm font-semibold text-[var(--foreground)]">
                       Nhập câu trả lời của bạn:
                     </label>
-                    {currentQuestion.tolerance !== undefined && currentQuestion.tolerance !== null && currentQuestion.tolerance > 0 ? (
-                      <span className="inline-flex items-center gap-1 rounded-lg bg-blue-500/10 px-2.5 py-1 text-xs font-semibold text-blue-700 dark:text-blue-300 border border-blue-500/20">
-                        <Info className="h-3.5 w-3.5" />
-                        Sai số cho phép: ± {currentQuestion.tolerance}
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 rounded-lg bg-[var(--surface-hover)] px-2.5 py-1 text-xs font-medium text-[var(--muted-foreground)] border border-[var(--border)]">
-                        <Info className="h-3.5 w-3.5" />
-                        Sai số: Không cho phép (Khớp chính xác)
-                      </span>
-                    )}
+                    <span className="inline-flex items-center gap-1 rounded-lg bg-blue-500/10 px-2.5 py-1 text-xs font-semibold text-blue-700 dark:text-blue-300 border border-blue-500/20">
+                      <Check className="h-3.5 w-3.5 stroke-[2.5]" />
+                      Yêu cầu: Khớp chính xác 100% đáp án
+                    </span>
                   </div>
                   <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
                     <div className="relative w-full max-w-sm">
                       <Input
                         type="text"
-                        placeholder="Ví dụ: 1/2 hoặc 0.5 hoặc -3"
+                        placeholder="Nhập chính xác đáp án..."
                         value={currentAnswer?.textAnswer ?? ""}
                         onChange={(e) => handleTextAnswerChange(e.target.value)}
                         className="h-12 text-base font-semibold font-mono bg-[var(--input-bg)] border-[var(--input-border)] text-[var(--foreground)] rounded-xl pl-3"
@@ -626,11 +638,9 @@ export function ExamTakingUI({ initialPayload }: ExamTakingUIProps) {
                     </div>
                   </div>
                   <p className="text-xs text-[var(--muted-foreground)] flex items-center gap-1.5 pt-1">
-                    <Calculator className="h-3.5 w-3.5 text-blue-500" />
+                    <Info className="h-3.5 w-3.5 text-blue-500 shrink-0" />
                     <span>
-                      {currentQuestion.tolerance !== undefined && currentQuestion.tolerance !== null && currentQuestion.tolerance > 0
-                        ? `Hệ thống chấp nhận phân số (1/2), số thập phân (0.5 hoặc 0,5) hoặc số âm (-2) với sai số chấp nhận tối đa ± ${currentQuestion.tolerance}.`
-                        : "Hệ thống yêu cầu đáp án khớp giá trị chính xác (chấp nhận các cách viết tương đương như 1/2, 0.5 hoặc 0,5). Không cho phép sai số làm tròn."}
+                      Hệ thống so khớp chính xác 100% từng ký tự chuỗi câu trả lời với đáp án chuẩn của đề thi.
                     </span>
                   </p>
                 </div>

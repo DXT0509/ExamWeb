@@ -5,6 +5,7 @@ import { CheckCircle2, HelpCircle, XCircle, Trophy, ArrowLeft, BookOpen, Clock, 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { evaluateMathAnswer } from "@/lib/exams/math-parser";
+import { parseQuestionImages } from "@/lib/exams/images";
 import type { StudentAttemptResult } from "@/lib/exams/attempts";
 
 interface ExamResultUIProps {
@@ -326,15 +327,34 @@ export function ExamResultUI({ result }: ExamResultUIProps) {
                     <p className="text-sm font-medium text-[var(--foreground)] whitespace-pre-line">{q.content}</p>
                   )}
 
-                  {q.image_path && (
-                    <div className="my-2 overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--card-secondary)] p-2">
-                      <img
-                        src={q.image_path}
-                        alt={`Hình minh họa câu ${idx + 1}`}
-                        className="max-h-80 object-contain mx-auto rounded-lg"
-                      />
-                    </div>
-                  )}
+                  {/* Question Images */}
+                  {(() => {
+                    const images = parseQuestionImages(q.image_path);
+                    if (images.length === 0) return null;
+                    return (
+                      <div className="my-3 space-y-3">
+                        {images.map((imgUrl, imgIdx) => (
+                          <div
+                            key={imgIdx}
+                            className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--card-secondary)] p-2 sm:p-3"
+                          >
+                            {images.length > 1 && (
+                              <div className="text-[11px] font-semibold text-[var(--muted-foreground)] mb-1 px-1 flex items-center gap-1.5">
+                                <span className="inline-block w-1.5 h-1.5 rounded-full bg-[var(--primary)]" />
+                                <span>Hình ảnh {imgIdx + 1} / {images.length}</span>
+                              </div>
+                            )}
+                            <img
+                              src={imgUrl}
+                              alt={`Hình minh họa câu ${idx + 1}${images.length > 1 ? ` (Phần ${imgIdx + 1})` : ""}`}
+                              className="w-full max-w-3xl h-auto object-contain mx-auto rounded-lg"
+                              loading="lazy"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
 
                   {/* Mode 1: Multiple Choice Options Result */}
                   {!isTf && !isShort && (
@@ -455,15 +475,9 @@ export function ExamResultUI({ result }: ExamResultUIProps) {
                             <span className="text-base font-bold font-mono text-emerald-600 dark:text-emerald-400">
                               {q.correct_answer_raw || "—"}
                             </span>
-                            {q.tolerance !== undefined && q.tolerance !== null && q.tolerance > 0 ? (
-                              <span className="text-xs font-mono font-medium text-blue-700 dark:text-blue-300 bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20">
-                                (Sai số: ± {q.tolerance})
-                              </span>
-                            ) : (
-                              <span className="text-xs font-medium text-[var(--muted-foreground)] bg-[var(--surface-hover)] px-2 py-0.5 rounded border border-[var(--border)]">
-                                (Sai số: Không cho phép)
-                              </span>
-                            )}
+                            <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                              Khớp chính xác 100%
+                            </span>
                           </div>
                         </div>
                       </div>

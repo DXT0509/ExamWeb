@@ -98,6 +98,8 @@ export function BuilderQuestionCard({
   const [isDragging, setIsDragging] = useState(false);
   const [fileError, setFileError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const contentEditorRef = useRef<HTMLDivElement>(null);
+  const answerEditorRef = useRef<HTMLDivElement>(null);
 
   // Auto-save state and refs
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
@@ -275,10 +277,51 @@ export function BuilderQuestionCard({
   const handleFinishAnswerEditing = async () => {
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current);
+      saveTimeoutRef.current = null;
     }
     await triggerAutoSaveAnswer();
     setEditingMode("none");
   };
+
+  // Click outside / Focus outside auto-complete
+  useEffect(() => {
+    if (editingMode === "none") return;
+
+    const handlePointerDownOutside = (e: MouseEvent | TouchEvent) => {
+      const target = e.target as Node;
+      if (editingMode === "content") {
+        if (contentEditorRef.current && !contentEditorRef.current.contains(target)) {
+          handleFinishEditing();
+        }
+      } else if (editingMode === "answer") {
+        if (answerEditorRef.current && !answerEditorRef.current.contains(target)) {
+          handleFinishAnswerEditing();
+        }
+      }
+    };
+
+    const handleFocusOutside = (e: FocusEvent) => {
+      const target = e.relatedTarget as Node | null;
+      if (target) {
+        if (editingMode === "content") {
+          if (contentEditorRef.current && !contentEditorRef.current.contains(target)) {
+            handleFinishEditing();
+          }
+        } else if (editingMode === "answer") {
+          if (answerEditorRef.current && !answerEditorRef.current.contains(target)) {
+            handleFinishAnswerEditing();
+          }
+        }
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDownOutside);
+    document.addEventListener("focusout", handleFocusOutside);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDownOutside);
+      document.removeEventListener("focusout", handleFocusOutside);
+    };
+  }, [editingMode, content, imagePath, explanation, correctAnswerRaw, tolerance]);
 
   const activeOptions = question.question_options
     .filter((o) => !o.deleted_at)
@@ -563,31 +606,18 @@ export function BuilderQuestionCard({
           {!readOnly && (
             <>
               {/* Quick Edit Question Content Button in Header */}
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  if (editingMode === "content") {
-                    handleFinishEditing();
-                  } else {
-                    setEditingMode("content");
-                  }
-                }}
-                className="h-8 text-xs border-[var(--border)] bg-[var(--surface)] text-[var(--foreground)] hover:bg-[var(--surface-hover)] rounded-xl hidden sm:flex items-center gap-1.5"
-              >
-                {editingMode === "content" ? (
-                  <>
-                    <Check className="h-3.5 w-3.5 text-emerald-500" />
-                    <span>Xong</span>
-                  </>
-                ) : (
-                  <>
-                    <Pencil className="h-3.5 w-3.5" />
-                    <span>Sửa câu hỏi</span>
-                  </>
-                )}
-              </Button>
+              {editingMode !== "content" && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setEditingMode("content")}
+                  className="h-8 text-xs border-[var(--border)] bg-[var(--surface)] text-[var(--foreground)] hover:bg-[var(--surface-hover)] rounded-xl hidden sm:flex items-center gap-1.5"
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                  <span>Sửa câu hỏi</span>
+                </Button>
+              )}
 
               {/* Menu */}
               <div className="relative">
@@ -676,6 +706,7 @@ export function BuilderQuestionCard({
         {/* ========================================================================= */}
         {editingMode === "content" && !readOnly ? (
           <div
+            ref={contentEditorRef}
             onPaste={handlePasteImage}
             onDragOver={(e) => {
               if (e.dataTransfer.types.includes("Files")) {
@@ -1016,14 +1047,6 @@ export function BuilderQuestionCard({
                   </span>
                 )}
               </div>
-              <Button
-                type="button"
-                size="sm"
-                onClick={handleFinishEditing}
-                className="bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white rounded-xl shadow-xs text-xs px-4"
-              >
-                Xong
-              </Button>
             </div>
           </div>
         ) : (
@@ -1252,7 +1275,7 @@ export function BuilderQuestionCard({
           <div>
             {editingMode === "answer" && !readOnly ? (
               /* State 2: Edit Answer Only */
-              <div className="rounded-2xl border border-blue-500/40 bg-blue-500/10 p-4 sm:p-5 space-y-4">
+              <div ref={answerEditorRef} className="rounded-2xl border border-blue-500/40 bg-blue-500/10 p-4 sm:p-5 space-y-4">
                 <div className="flex items-center justify-between border-b border-blue-500/20 pb-2">
                   <span className="text-xs font-bold uppercase tracking-wider text-blue-700 dark:text-blue-300 flex items-center gap-1.5">
                     <Calculator className="h-4 w-4" />
@@ -1308,18 +1331,10 @@ export function BuilderQuestionCard({
                     ) : (
                       <span className="text-[var(--muted-foreground)] flex items-center gap-1">
                         <Check className="h-3.5 w-3.5 text-emerald-500" />
-                        Tự động lưu khi nhập
+                        Mọi thay đổi tự động lưu
                       </span>
                     )}
                   </div>
-                  <Button
-                    type="button"
-                    size="sm"
-                    onClick={handleFinishAnswerEditing}
-                    className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-xs text-xs px-4"
-                  >
-                    Xong
-                  </Button>
                 </div>
               </div>
             ) : (
